@@ -1,0 +1,8 @@
+node_modules/
+*.csv
+*.zip
+*.shp
+*.shx
+*.dbf
+*.prj
+__pycache__/

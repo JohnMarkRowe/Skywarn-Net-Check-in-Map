@@ -1,0 +1,11 @@
+const topo=require('topojson-client');
+const counties=require('us-atlas/counties-10m.json');
+const states=require('us-atlas/states-10m.json');
+const [LON0,LON1,LAT0,LAT1]=[-94.9,-89.4,32.7,36.8];
+const r=n=>Math.round(n*1000)/1000;
+const rings=g=>g.type==='Polygon'?g.coordinates:g.coordinates.flat();
+const inView=f=>{let ok=false;for(const ring of rings(f.geometry))for(const [x,y] of ring){if(x>LON0-.5&&x<LON1+.5&&y>LAT0-.5&&y<LAT1+.5){ok=true;break}}return ok};
+const cf=topo.feature(counties,counties.objects.counties).features.filter(inView).map(f=>({n:f.properties.name,f:String(f.id),r:rings(f.geometry).map(ring=>ring.map(([x,y])=>[r(x),r(y)]))}));
+const sf=topo.feature(states,states.objects.states).features.filter(inView).map(f=>({n:f.properties.name,f:String(f.id),r:rings(f.geometry).map(ring=>ring.map(([x,y])=>[r(x),r(y)]))}));
+require('fs').writeFileSync('../data/geo.json',JSON.stringify({counties:cf,states:sf}));
+console.log('counties',cf.length,'AR',cf.filter(c=>c.f.startsWith('05')).length,'states',sf.map(s=>s.n).join(','));

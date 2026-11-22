@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skywarn Net Check-in Map (prototype)</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2430; --mute:#5b6675; --line:#d9dee5; --accent:#c2410c; --state:#eef1f5; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#12161c; --card:#1a2028; --ink:#e8ecf1; --mute:#9aa6b5; --line:#2c3541; --accent:#fb923c; --state:#202833; } }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card)}
+  h1{font-size:18px;margin:0 0 2px}
+  .sub{color:var(--mute);font-size:13px}
+  main{display:grid;grid-template-columns:1fr 280px;gap:14px;padding:14px;max-width:1200px;margin:0 auto}
+  @media (max-width:820px){ main{grid-template-columns:1fr} }
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px}
+  #mapwrap{position:relative;padding:8px}
+  svg{width:100%;height:auto;display:block}
+  .nstate{fill:none;stroke:var(--line);stroke-width:1}
+  #map{background:var(--bg);border-radius:6px}
+  #arstate .state{fill:none;stroke:var(--ink);stroke-width:1.8;pointer-events:none}
+  #counties .county{fill:var(--state);stroke:var(--mute);stroke-width:.6;opacity:.95}
+  #counties .county:hover{fill:var(--line)}
+  #counties .out{fill:none;stroke:var(--line);stroke-width:.5;pointer-events:none}
+  #cwa .cwa{fill:none;stroke:#2563eb;stroke-width:2.4;stroke-dasharray:7 4;pointer-events:none}
+  .cwalbl{fill:#2563eb;font-size:15px;font-weight:700;pointer-events:none}
+  .tg{display:flex;gap:14px;font-size:13px;padding:8px 12px 0;flex-wrap:wrap}
+  .tg label{cursor:pointer}
+  .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2;cursor:pointer;opacity:.92}
+  .dot.county{fill:#7c3aed}
+  .dot:hover,.dot:focus{stroke-width:2.5;opacity:1;outline:none}
+  .ring{fill:none;stroke:var(--accent);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:ping 1.4s ease-out forwards;pointer-events:none}
+  @keyframes ping{from{transform:scale(1);opacity:.9}to{transform:scale(4.5);opacity:0}}
+  .lbl{fill:var(--mute);font-size:11px}
+  #tip{position:absolute;pointer-events:none;background:#111827;color:#fff;padding:5px 9px;border-radius:6px;font-size:13px;display:none;white-space:nowrap;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  #tip b{font-size:15px;letter-spacing:.3px}
+  #tip span{color:#cbd5e1}
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
+  button,select{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  input[type=range]{flex:1;min-width:140px}
+  #clock{font-variant-numeric:tabular-nums;color:var(--mute);min-width:120px;text-align:right}
+  aside .card{padding:12px 14px;margin-bottom:14px}
+  aside h2{font-size:14px;margin:0 0 8px}
+  .count{font-size:34px;font-weight:700;line-height:1}
+  ul{margin:0;padding:0;list-style:none}
+  li{padding:4px 0;border-top:1px solid var(--line);font-size:13px}
+  li:first-child{border-top:0}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .note{color:var(--mute);font-size:12px;margin-top:6px}
+  .key{display:flex;gap:12px;font-size:12px;color:var(--mute);padding:0 12px 10px;flex-wrap:wrap}
+  .key i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Skywarn Net Check-in Map <span class="sub">— prototype, replaying a sample net</span></h1>
+  <div class="sub" id="netname"></div>
+</header>
+<main>
+  <section class="card">
+    <div id="mapwrap">
+      <svg id="map" viewBox="0 0 800 600" role="img" aria-label="Map of Arkansas with net check-ins"></svg>
+      <div id="tip"></div>
+    </div>
+    <div class="tg">
+      <label><input type="checkbox" id="t-counties" checked> County outlines</label>
+      <label><input type="checkbox" id="t-cwa" checked> NWS County Warning Areas <span class="sub" id="cwa-note"></span></label>
+    </div>
+    <div class="key">
+      <span><i style="background:var(--accent)"></i>City-level location</span>
+      <span><i style="background:#7c3aed"></i>County-level (approximate)</span>
+    </div>
+    <div class="controls">
+      <button class="primary" id="play">Play</button>
+      <button id="restart">Restart</button>
+      <label class="sub">Speed
+        <select id="speed"><option value="30">30×</option><option value="60" selected>60×</option><option value="120">120×</option><option value="240">240×</option></select>
+      </label>
+      <input type="range" id="scrub" min="0" value="0" aria-label="Net timeline">
+      <div id="clock"></div>
+    </div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>Checked in</h2>
+      <div class="count" id="count">0</div>
+      <div class="sub" id="of"></div>
+    </div>
+    <div class="card">
+      <h2>Latest</h2>
+      <ul id="latest"></ul>
+    </div>
+    <div class="card">
+      <h2>Outside the map frame</h2>
+      <ul id="offlist"></ul>
+      <div class="note">Out-of-state check-ins that are placed correctly but fall outside this Arkansas view.</div>
+    </div>
+    <div class="card">
+      <h2>Needs review</h2>
+      <ul id="review"></ul>
+      <div class="note">Locations I could not place with confidence. They are not shown on the map; a person can correct them once and the fix is remembered.</div>
+    </div>
+  </aside>
+</main>
+<script>
+const DATA = __DATA__;
+const NS = 'http://www.w3.org/2000/svg';
+// Equirectangular projection, longitude scaled by cos(35°) so the shape looks right.
+const LON0=-94.9, LON1=-89.4, LAT0=32.7, LAT1=36.8, K=Math.cos(35*Math.PI/180);
+const W=800, H=600, PAD=24;
+const sx=(W-2*PAD)/((LON1-LON0)*K), sy=(H-2*PAD)/(LAT1-LAT0), S=Math.min(sx,sy);
+const offx=(W-(LON1-LON0)*K*S)/2, offy=(H-(LAT1-LAT0)*S)/2;
+const X=lon=>offx+(lon-LON0)*K*S, Y=lat=>offy+(LAT1-lat)*S;
+
+const map=document.getElementById('map');
+const GEO = __GEO__;
+const CWA = __CWA__;  // null until the official NWS County Warning Area file is supplied
+function path(rings){return rings.map(r=>'M'+r.map(p=>X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('L')+'Z').join('')}
+function layer(id){const g=document.createElementNS(NS,'g');g.setAttribute('id',id);map.appendChild(g);return g}
+function addPath(g,d,cls,title){const p=document.createElementNS(NS,'path');p.setAttribute('d',d);p.setAttribute('class',cls);if(title){const t=document.createElementNS(NS,'title');t.textContent=title;p.appendChild(t)}g.appendChild(p);return p}
+const gNeighbors=layer('neighbors'), gCounties=layer('counties'), gCwa=layer('cwa'), gState=layer('arstate');
+GEO.states.forEach(s=>{ if(s.f!=='05') addPath(gNeighbors,path(s.r),'nstate'); });
+GEO.counties.forEach(c=>{ const ar=c.f.startsWith('05'); addPath(gCounties,path(c.r),ar?'county':'county out',ar?c.n+' County':null); });
+if(CWA){ CWA.forEach(w=>addPath(gCwa,path(w.r),'cwa')); const lab=(t,x,y)=>{const e=document.createElementNS(NS,'text');e.setAttribute('x',X(x));e.setAttribute('y',Y(y));e.setAttribute('class','cwalbl');e.textContent=t;gCwa.appendChild(e)}; CWA.forEach(w=>{if(w.lx!=null)lab(w.id,w.lx,w.ly)}); }
+GEO.states.filter(s=>s.f==='05').forEach(s=>addPath(gState,path(s.r),'state'));
+const dots=document.createElementNS(NS,'g'); map.appendChild(dots);
+const tgl=(id,g)=>{const el=document.getElementById(id); if(!el)return; el.onchange=()=>g.style.display=el.checked?'':'none';};
+tgl('t-counties',gCounties); tgl('t-cwa',gCwa);
+if(!CWA){const el=document.getElementById('t-cwa'); el.disabled=true; el.checked=false; document.getElementById('cwa-note').textContent='(official NWS file not loaded yet)';}
+
+const pts=DATA.pts.map(p=>({...p,ms:Date.parse(p.t)}));
+const t0=pts[0].ms, t1=pts[pts.length-1].ms;
+const tip=document.getElementById('tip'), wrap=document.getElementById('mapwrap');
+const fmt=ms=>new Date(ms).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'});
+document.getElementById('netname').textContent=DATA.net+' · replay of a completed net';
+document.getElementById('review').innerHTML=DATA.review.map(r=>'<li><span class="mono">'+r.c+'</span> — “'+r.loc.replace(/</g,'&lt;')+'”</li>').join('')||'<li>None</li>';
+
+function showTip(e,p){
+  tip.innerHTML='<b class="mono">'+p.c+'</b> <span>'+p.loc.replace(/</g,'&lt;')+' · '+fmt(p.ms)+'</span>';
+  tip.style.display='block';
+  const r=wrap.getBoundingClientRect();
+  let x=e.clientX-r.left+14, y=e.clientY-r.top-34;
+  if(x+tip.offsetWidth>r.width-6) x=e.clientX-r.left-tip.offsetWidth-14;
+  tip.style.left=x+'px'; tip.style.top=Math.max(4,y)+'px';
+}
+// Spread dots that share a town so every callsign stays hoverable.
+const seen={};
+pts.forEach(p=>{
+  const k=p.lat+','+p.lon; const n=seen[k]=(seen[k]||0)+1; p.n=n-1;
+  const a=p.n*2.4, r=p.n?5+p.n*1.6:0;
+  p.x=X(p.lon)+Math.cos(a)*r; p.y=Y(p.lat)+Math.sin(a)*r; p.el=null;
+  p.off = p.x<4||p.x>W-4||p.y<4||p.y>H-4;
+});
+const offPts=pts.filter(p=>p.off);
+document.getElementById('of').textContent='of '+pts.length+' placed'+(offPts.length?' · '+offPts.length+' outside the map frame':'');
+document.getElementById('offlist').innerHTML=offPts.map(p=>'<li><span class="mono">'+p.c+'</span> — '+p.loc.replace(/</g,'&lt;')+'</li>').join('')||'<li class="sub">None</li>';
+function add(p,pulse){
+  if(p.el||p.off) return;
+  const c=document.createElementNS(NS,'circle');
+  c.setAttribute('cx',p.x); c.setAttribute('cy',p.y); c.setAttribute('r',6);
+  c.setAttribute('class','dot'+(p.lvl==='county'?' county':'')); c.setAttribute('tabindex','0');
+  c.setAttribute('aria-label',p.c+', '+p.loc);
+  c.addEventListener('mousemove',e=>showTip(e,p));
+  c.addEventListener('mouseleave',()=>tip.style.display='none');
+  c.addEventListener('focus',()=>{const b=c.getBoundingClientRect();showTip({clientX:b.x+b.width,clientY:b.y},p)});
+  c.addEventListener('blur',()=>tip.style.display='none');
+  dots.appendChild(c); p.el=c;
+  if(pulse){const g=document.createElementNS(NS,'circle');g.setAttribute('cx',p.x);g.setAttribute('cy',p.y);g.setAttribute('r',6);g.setAttribute('class','ring');dots.appendChild(g);setTimeout(()=>g.remove(),1500);}
+}
+function remove(p){ if(p.el){p.el.remove();p.el=null;} }
+
+let now=t0-1, playing=false, last=0;
+const scrub=document.getElementById('scrub'); scrub.max=t1-t0;
+function render(pulse){
+  let n=0; const recent=[];
+  pts.forEach(p=>{ if(p.ms<=now){ add(p,pulse&&p.ms>now-4000*speed()); n++; recent.push(p);} else remove(p); });
+  document.getElementById('count').textContent=n;
+  document.getElementById('latest').innerHTML=recent.slice(-6).reverse().map(p=>'<li><span class="mono">'+p.c+'</span> — '+p.loc.replace(/</g,'&lt;')+'</li>').join('')||'<li class="sub">Waiting for first check-in…</li>';
+  document.getElementById('clock').textContent=fmt(Math.max(now,t0))+' Central';
+  scrub.value=Math.max(0,now-t0);
+}
+const speed=()=>+document.getElementById('speed').value;
+function tick(ts){
+  if(!playing) return;
+  if(last){ now+= (ts-last)*speed(); }
+  last=ts;
+  if(now>=t1){ now=t1; playing=false; document.getElementById('play').textContent='Replay'; }
+  render(true);
+  if(playing) requestAnimationFrame(tick);
+}
+document.getElementById('play').onclick=()=>{
+  if(now>=t1) now=t0-1;
+  playing=!playing; last=0;
+  document.getElementById('play').textContent=playing?'Pause':'Play';
+  if(playing) requestAnimationFrame(tick);
+};
+document.getElementById('restart').onclick=()=>{playing=false;now=t0-1;document.getElementById('play').textContent='Play';dots.innerHTML='';pts.forEach(p=>p.el=null);render(false);};
+scrub.oninput=()=>{now=t0+(+scrub.value);render(false);};
+render(false);
+</script>
+</body>
+</html>
