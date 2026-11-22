@@ -30,6 +30,7 @@
   #counties .out{fill:none;stroke:var(--line);stroke-width:.5;pointer-events:none}
   #cwa .cwa{fill:none;stroke:#2563eb;stroke-width:2.4;stroke-dasharray:7 4;pointer-events:none}
   .cwalbl{fill:#2563eb;font-size:15px;font-weight:700;pointer-events:none}
+  .cname{fill:var(--ink);font-size:8.5px;text-anchor:middle;dominant-baseline:middle;pointer-events:none;paint-order:stroke;stroke:var(--state);stroke-width:2.2px;stroke-linejoin:round;opacity:.85}
   .tg{display:flex;gap:14px;font-size:13px;padding:8px 12px 0;flex-wrap:wrap}
   .tg label{cursor:pointer}
   .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2;cursor:pointer;opacity:.92}
@@ -82,6 +83,7 @@
     </div>
     <div class="tg">
       <label><input type="checkbox" id="t-counties" checked> County outlines</label>
+      <label><input type="checkbox" id="t-cnames"> County names</label>
       <label><input type="checkbox" id="t-cwa" checked> NWS County Warning Areas</label>
     </div>
     <div class="key">
@@ -164,7 +166,25 @@ GEO.counties.forEach(c=>{ const ar=c.f.startsWith('05'); addPath(gCounties,path(
 CWA.forEach(w=>addPath(gCwa,path(w.r),'cwa'));
 CWA.forEach(w=>{ if(w.lx==null) return; const e=document.createElementNS(NS,'text'); e.setAttribute('x',X(w.lx)); e.setAttribute('y',Y(w.ly)); e.setAttribute('class','cwalbl'); e.textContent=w.id; gCwa.appendChild(e); });
 GEO.states.filter(s=>s.f==='05').forEach(s=>addPath(gState,path(s.r),'state'));
+// County names: drawn at the area-weighted centre of each Arkansas county's largest piece.
+const gNames=layer('cnames'); gNames.style.display='none';
+function centroid(ring){
+  let a=0,cx=0,cy=0;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const x0=X(ring[j][0]),y0=Y(ring[j][1]),x1=X(ring[i][0]),y1=Y(ring[i][1]),f=x0*y1-x1*y0;
+    a+=f; cx+=(x0+x1)*f; cy+=(y0+y1)*f;
+  }
+  a*=.5; return a?[cx/(6*a),cy/(6*a)]:[X(ring[0][0]),Y(ring[0][1])];
+}
+GEO.counties.filter(c=>c.f.startsWith('05')).forEach(c=>{
+  const big=c.r.reduce((m,r)=>r.length>m.length?r:m,c.r[0]);
+  const [x,y]=centroid(big);
+  const t=document.createElementNS(NS,'text');
+  t.setAttribute('x',x.toFixed(1)); t.setAttribute('y',y.toFixed(1)); t.setAttribute('class','cname');
+  t.textContent=c.n; gNames.appendChild(t);
+});
 const dots=document.createElementNS(NS,'g'); map.appendChild(dots);
+$('t-cnames').onchange=e=>gNames.style.display=e.target.checked?'':'none';
 $('t-counties').onchange=e=>gCounties.style.display=e.target.checked?'':'none';
 $('t-cwa').onchange=e=>gCwa.style.display=e.target.checked?'':'none';
 

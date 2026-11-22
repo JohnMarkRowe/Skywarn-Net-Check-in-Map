@@ -10,7 +10,7 @@ A map of amateur radio operators who check in to statewide Skywarn nets, with co
   - *Historical report:* replays the bundled sample net, or any Ham.Live end-of-net CSV you load from your computer (play, pause, speed, timeline). New check-ins pulse as they arrive.
   - *Live net:* accepts a Net ID or live net link and recognizes the ID, but is **not connected** to anything yet. The page exposes `addLiveCheckin({callsign, location, time})` as the single entry point a live feed will call.
 - Hover a pin for callsign, town, and time.
-- County outlines (US Census data via `us-atlas`) and NWS CWA outlines (official NWS shapefile).
+- County outlines (US Census data via `us-atlas`), an optional county-names layer (off by default), and NWS CWA outlines (official NWS shapefile). Each layer has its own toggle.
 - Locations that cannot be placed with confidence are listed under "Needs review" instead of being guessed.
 
 ## What is not built yet
