@@ -15,7 +15,7 @@ A map of amateur radio operators who check in to statewide Skywarn nets, with co
 
 ## What is not built yet
 
-- **Live feed.** It still needs to be confirmed how a running Ham.Live net exposes its check-ins. The end-of-net CSV report is only available after the net closes.
+- **Live feed.** Running-net check-ins are behind a login in Ham.Live. A proposed public, read-only endpoint is described in [docs/hamlive-checkin-feed-proposal.md](docs/hamlive-checkin-feed-proposal.md) and is awaiting review by the instance operator. The end-of-net CSV report is only available after the net closes.
 - **Net discovery.** Each Ham.Live net has a stable Net ID, and the live page is `/views/livenet/<Net ID>`. The idea is to pick or detect the current net by ID, not by its name.
 - **Geocoding.** Town coordinates in `scripts/resolve_locations.py` are approximate and entered by hand. A real build should geocode, with a manual override list.
 - **Map tiles.** The prototype draws its own outline map. A deployed site would use proper tiles.
