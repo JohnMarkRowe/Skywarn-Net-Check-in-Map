@@ -5,7 +5,7 @@ src = sys.argv[1]  # path to a Ham.Live end-of-net report CSV
 # Approximate city-center coordinates (lat, lon). Level: city / county.
 # Entries I'm not confident about are deliberately left out so they land in "needs review".
 PLACES = {
- 'magnolia': (33.267, -93.239), 'north little rock': (34.770, -92.267),
+ 'magnolia': (33.267, -93.239), 'north little rock': (34.770, -92.267), 'little rock': (34.746, -92.290),
  'danville': (35.056, -93.394), 'conway': (35.089, -92.442),
  'conwayou': (35.089, -92.442),  # typo of Conway, fixed by hand
  'malvern': (34.363, -92.813), 'pearcy': (34.325, -93.010),

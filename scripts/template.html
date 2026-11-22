@@ -22,25 +22,34 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px}
   #mapwrap{position:relative;padding:8px}
   svg{width:100%;height:auto;display:block}
+  #map{background:var(--bg);border-radius:6px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+  #map.dragging{cursor:grabbing}
+  #world path{vector-effect:non-scaling-stroke}
   .nstate{fill:none;stroke:var(--line);stroke-width:1}
-  #map{background:var(--bg);border-radius:6px}
   #arstate .state{fill:none;stroke:var(--ink);stroke-width:1.8;pointer-events:none}
-  #counties .county{fill:var(--state);stroke:var(--mute);stroke-width:.6;opacity:.95}
+  #counties .county{fill:var(--state);stroke:var(--mute);stroke-width:var(--ctyw,.6px);stroke-opacity:var(--ctyo,.8)}
   #counties .county:hover{fill:var(--line)}
   #counties .out{fill:none;stroke:var(--line);stroke-width:.5;pointer-events:none}
-  #cwa .cwa{fill:none;stroke:#2563eb;stroke-width:2.4;stroke-dasharray:7 4;pointer-events:none}
-  .cwalbl{fill:#2563eb;font-size:15px;font-weight:700;pointer-events:none}
-  .cname{fill:var(--ink);font-size:8.5px;text-anchor:middle;dominant-baseline:middle;pointer-events:none;paint-order:stroke;stroke:var(--state);stroke-width:2.2px;stroke-linejoin:round;opacity:.85}
+  #cwa .cwa{fill:none;stroke:#2563eb;stroke-width:var(--cwaw,2.4px);stroke-dasharray:7 4;pointer-events:none}
+  .cwalbl{fill:#2563eb;font-size:var(--cwf,15px);font-weight:700;pointer-events:none;paint-order:stroke;stroke:var(--card);stroke-width:var(--cwh,3px);stroke-linejoin:round}
+  .cname{fill:var(--ink);font-size:var(--cnf,9px);text-anchor:middle;dominant-baseline:middle;pointer-events:none;paint-order:stroke;stroke:var(--state);stroke-width:var(--cnh,2.2px);stroke-linejoin:round;opacity:.88}
   .tg{display:flex;gap:14px;font-size:13px;padding:8px 12px 0;flex-wrap:wrap}
   .tg label{cursor:pointer}
-  .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2;cursor:pointer;opacity:.92}
+  .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2px;cursor:pointer;opacity:.95;vector-effect:non-scaling-stroke}
   .dot.county{fill:#7c3aed}
-  .dot:hover,.dot:focus{stroke-width:2.5;opacity:1;outline:none}
-  .ring{fill:none;stroke:var(--accent);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:ping 1.4s ease-out forwards;pointer-events:none}
+  .dot:hover,.dot:focus{stroke-width:2.5px;opacity:1;outline:none}
+  .bub{fill:var(--accent);stroke:#fff;stroke-width:2px;cursor:pointer;vector-effect:non-scaling-stroke}
+  .bub:hover,.bub:focus{stroke-width:3px;outline:none}
+  .bubn{fill:#fff;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+  .ring{fill:none;stroke:var(--accent);stroke-width:2px;vector-effect:non-scaling-stroke;transform-box:fill-box;transform-origin:center;animation:ping 1.4s ease-out forwards;pointer-events:none}
   @keyframes ping{from{transform:scale(1);opacity:.9}to{transform:scale(4.5);opacity:0}}
-  #tip{position:absolute;pointer-events:none;background:#111827;color:#fff;padding:5px 9px;border-radius:6px;font-size:13px;display:none;white-space:nowrap;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  #tip{position:absolute;pointer-events:none;background:#111827;color:#fff;padding:5px 9px;border-radius:6px;font-size:13px;display:none;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.3);max-width:300px}
   #tip b{font-size:15px;letter-spacing:.3px}
   #tip span{color:#cbd5e1}
+  .zoombar{position:absolute;top:16px;left:16px;display:flex;flex-direction:column;gap:6px;z-index:4}
+  .zoombar button{width:36px;height:36px;padding:0;font-size:19px;line-height:1;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+  .zoombar button.wide{font-size:12px;font-weight:600}
+  .zread{position:absolute;bottom:16px;left:16px;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--mute);z-index:4;pointer-events:none}
   .controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
   button,select,input[type=text]{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)}
   button{cursor:pointer}
@@ -78,17 +87,25 @@
 <main>
   <section class="card">
     <div id="mapwrap">
-      <svg id="map" viewBox="0 0 800 600" role="img" aria-label="Map of Arkansas with net check-ins"></svg>
+      <svg id="map" viewBox="0 0 800 600" role="img" aria-label="Map of Arkansas with net check-ins. Scroll or pinch to zoom, drag to pan."></svg>
+      <div class="zoombar">
+        <button type="button" id="zin" aria-label="Zoom in">+</button>
+        <button type="button" id="zout" aria-label="Zoom out">−</button>
+        <button type="button" id="zfit" class="wide" title="Zoom to the check-ins">Fit</button>
+        <button type="button" id="zreset" class="wide" title="Show all of Arkansas">All</button>
+      </div>
+      <div class="zread" id="zread"></div>
       <div id="tip"></div>
     </div>
     <div class="tg">
       <label><input type="checkbox" id="t-counties" checked> County outlines</label>
-      <label><input type="checkbox" id="t-cnames"> County names</label>
+      <label><input type="checkbox" id="t-cnames" checked> County names <span class="sub">(appear when zoomed in)</span></label>
       <label><input type="checkbox" id="t-cwa" checked> NWS County Warning Areas</label>
     </div>
     <div class="key">
-      <span><i style="background:var(--accent)"></i>City-level location</span>
-      <span><i style="background:#7c3aed"></i>County-level (approximate)</span>
+      <span><i style="background:var(--accent)"></i>Station</span>
+      <span><i style="background:#7c3aed"></i>County-level location (approximate)</span>
+      <span>Numbered circle = several stations close together; click it to zoom in</span>
     </div>
 
     <!-- Historical mode -->
@@ -148,26 +165,27 @@ const PLACES = __PLACES__;
 const NS = 'http://www.w3.org/2000/svg';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $ = id => document.getElementById(id);
+const el = (tag, attrs) => { const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; };
 
 // ---------- Map geometry (equirectangular, longitude scaled by cos 35°) ----------
-const LON0=-94.9, LON1=-89.4, LAT0=32.7, LAT1=36.8, K=Math.cos(35*Math.PI/180);
+const LON0=-94.9, LON1=-89.4, LAT0=32.7, LAT1=36.8, KX=Math.cos(35*Math.PI/180);
 const W=800, H=600, PAD=24;
-const sx=(W-2*PAD)/((LON1-LON0)*K), sy=(H-2*PAD)/(LAT1-LAT0), S=Math.min(sx,sy);
-const offx=(W-(LON1-LON0)*K*S)/2, offy=(H-(LAT1-LAT0)*S)/2;
-const X=lon=>offx+(lon-LON0)*K*S, Y=lat=>offy+(LAT1-lat)*S;
+const sx_=(W-2*PAD)/((LON1-LON0)*KX), sy_=(H-2*PAD)/(LAT1-LAT0), S=Math.min(sx_,sy_);
+const offx=(W-(LON1-LON0)*KX*S)/2, offy=(H-(LAT1-LAT0)*S)/2;
+const X=lon=>offx+(lon-LON0)*KX*S, Y=lat=>offy+(LAT1-lat)*S;
 
 const map=$('map');
+const world=el('g',{id:'world'}); map.appendChild(world);
 function path(rings){return rings.map(r=>'M'+r.map(p=>X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('L')+'Z').join('')}
-function layer(id){const g=document.createElementNS(NS,'g');g.setAttribute('id',id);map.appendChild(g);return g}
-function addPath(g,d,cls,title){const p=document.createElementNS(NS,'path');p.setAttribute('d',d);p.setAttribute('class',cls);if(title){const t=document.createElementNS(NS,'title');t.textContent=title;p.appendChild(t)}g.appendChild(p)}
-const gNeighbors=layer('neighbors'), gCounties=layer('counties'), gCwa=layer('cwa'), gState=layer('arstate');
+function layer(id){const g=el('g',{id}); world.appendChild(g); return g}
+function addPath(g,d,cls,title){const p=el('path',{d,class:cls}); if(title){const t=el('title',{}); t.textContent=title; p.appendChild(t)} g.appendChild(p)}
+const gNeighbors=layer('neighbors'), gCounties=layer('counties'), gCwa=layer('cwa'), gState=layer('arstate'), gNames=layer('cnames');
 GEO.states.forEach(s=>{ if(s.f!=='05') addPath(gNeighbors,path(s.r),'nstate'); });
 GEO.counties.forEach(c=>{ const ar=c.f.startsWith('05'); addPath(gCounties,path(c.r),ar?'county':'county out',ar?c.n+' County':null); });
 CWA.forEach(w=>addPath(gCwa,path(w.r),'cwa'));
-CWA.forEach(w=>{ if(w.lx==null) return; const e=document.createElementNS(NS,'text'); e.setAttribute('x',X(w.lx)); e.setAttribute('y',Y(w.ly)); e.setAttribute('class','cwalbl'); e.textContent=w.id; gCwa.appendChild(e); });
+CWA.forEach(w=>{ if(w.lx==null) return; const t=el('text',{x:X(w.lx),y:Y(w.ly),class:'cwalbl'}); t.textContent=w.id; gCwa.appendChild(t); });
 GEO.states.filter(s=>s.f==='05').forEach(s=>addPath(gState,path(s.r),'state'));
 // County names: drawn at the area-weighted centre of each Arkansas county's largest piece.
-const gNames=layer('cnames'); gNames.style.display='none';
 function centroid(ring){
   let a=0,cx=0,cy=0;
   for(let i=0,j=ring.length-1;i<ring.length;j=i++){
@@ -179,14 +197,90 @@ function centroid(ring){
 GEO.counties.filter(c=>c.f.startsWith('05')).forEach(c=>{
   const big=c.r.reduce((m,r)=>r.length>m.length?r:m,c.r[0]);
   const [x,y]=centroid(big);
-  const t=document.createElementNS(NS,'text');
-  t.setAttribute('x',x.toFixed(1)); t.setAttribute('y',y.toFixed(1)); t.setAttribute('class','cname');
-  t.textContent=c.n; gNames.appendChild(t);
+  const t=el('text',{x:x.toFixed(1),y:y.toFixed(1),class:'cname'}); t.textContent=c.n; gNames.appendChild(t);
 });
-const dots=document.createElementNS(NS,'g'); map.appendChild(dots);
-$('t-cnames').onchange=e=>gNames.style.display=e.target.checked?'':'none';
+const dots=layer('pins');
+
+// ---------- Zoom and pan ----------
+const MINK=1, MAXK=12, ZFAN=5;      // ZFAN: zoom at which stations in the same town fan out individually
+let k=1, tx=0, ty=0, dirty=true, anim=null;
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+function clampView(){ tx=clamp(tx,W-W*k,0); ty=clamp(ty,H-H*k,0); }
+function svgPt(e){ const r=map.getBoundingClientRect(); return [(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]; }
+function applyView(){
+  clampView();
+  world.setAttribute('transform','translate('+tx.toFixed(2)+' '+ty.toFixed(2)+') scale('+k.toFixed(4)+')');
+  // Boundary detail follows the zoom level: CWA lines are boldest when the whole state is in view,
+  // county lines get stronger as you zoom in, and county names appear from 2x.
+  const lvl=k<2?'wide':k<4?'mid':'close';
+  const st=map.style;
+  st.setProperty('--cwaw',lvl==='wide'?'2.8px':lvl==='mid'?'2.2px':'1.8px');
+  st.setProperty('--ctyw',lvl==='wide'?'.5px':lvl==='mid'?'.8px':'1.1px');
+  st.setProperty('--ctyo',lvl==='wide'?'.55':lvl==='mid'?'.8':'1');
+  st.setProperty('--cwf',(15/k)+'px'); st.setProperty('--cwh',(3/k)+'px');
+  st.setProperty('--cnf',((k<3?9:11)/k)+'px'); st.setProperty('--cnh',(2.4/k)+'px');
+  gNames.style.display=(k>=2&&$('t-cnames').checked)?'':'none';
+  $('zread').textContent='Zoom '+(k<10?k.toFixed(1):Math.round(k))+'× · '+(k<2?'CWAs + counties':k<5?'CWAs + counties + names':'close view');
+  dirty=true; tip.style.display='none'; render(false);
+}
+function animateTo(nk,ntx,nty,ms=240){
+  cancelAnimationFrame(anim);
+  nk=clamp(nk,MINK,MAXK);
+  const k0=k,x0=tx,y0=ty,t0=performance.now();
+  const step=t=>{ const u=Math.min(1,(t-t0)/ms), e=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2;
+    k=k0+(nk-k0)*e; tx=x0+(ntx-x0)*e; ty=y0+(nty-y0)*e; applyView(); if(u<1) anim=requestAnimationFrame(step); };
+  anim=requestAnimationFrame(step);
+}
+function zoomAt(px,py,factor,smooth){
+  const nk=clamp(k*factor,MINK,MAXK), r=nk/k;
+  const ntx=px-(px-tx)*r, nty=py-(py-ty)*r;
+  if(smooth) animateTo(nk,ntx,nty); else { k=nk; tx=ntx; ty=nty; applyView(); }
+}
+function zoomCentre(factor){ zoomAt(W/2,H/2,factor,true); }
+function viewOn(wx,wy,nk){ nk=clamp(nk,MINK,MAXK); animateTo(nk,W/2-wx*nk,H/2-wy*nk); }
+function fitPins(){
+  const ps=pts.filter(p=>!p.off&&p.ms<=now);
+  if(!ps.length){ animateTo(1,0,0); return; }
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  ps.forEach(p=>{const x=X(p.lon),y=Y(p.lat); x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);});
+  const bw=Math.max(x1-x0,30), bh=Math.max(y1-y0,30);
+  const nk=clamp(Math.min(W/(bw*1.25),H/(bh*1.25)),MINK,MAXK);
+  viewOn((x0+x1)/2,(y0+y1)/2,nk);
+}
+$('zin').onclick=()=>zoomCentre(1.8);
+$('zout').onclick=()=>zoomCentre(1/1.8);
+$('zfit').onclick=fitPins;
+$('zreset').onclick=()=>animateTo(1,0,0);
+
+map.addEventListener('wheel',e=>{ e.preventDefault(); cancelAnimationFrame(anim); const [px,py]=svgPt(e); zoomAt(px,py,Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0016)),false); },{passive:false});
+map.addEventListener('dblclick',e=>{ if(e.target.closest&&e.target.closest('.dot,.bub')) return; const [px,py]=svgPt(e); zoomAt(px,py,2,true); });
+const ptrs=new Map(); let start=null, dragMoved=false, pinch=null;
+const pdist=()=>{const a=[...ptrs.values()]; return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])};
+const pmid=()=>{const a=[...ptrs.values()]; return [(a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2]};
+map.addEventListener('pointerdown',e=>{
+  cancelAnimationFrame(anim);
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size===1){ start=[e.clientX,e.clientY]; dragMoved=false; }
+  if(ptrs.size===2){ pinch={d:pdist()}; dragMoved=true; }
+});
+window.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  const prev=ptrs.get(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size===2&&pinch){
+    const d=pdist(), m=pmid(), r=map.getBoundingClientRect();
+    zoomAt((m[0]-r.left)*W/r.width,(m[1]-r.top)*H/r.height,d/pinch.d,false); pinch.d=d; return;
+  }
+  if(ptrs.size===1){
+    if(!dragMoved&&Math.hypot(e.clientX-start[0],e.clientY-start[1])>4){ dragMoved=true; map.classList.add('dragging'); tip.style.display='none'; }
+    if(dragMoved){ const r=map.getBoundingClientRect(); tx+=(e.clientX-prev[0])*W/r.width; ty+=(e.clientY-prev[1])*H/r.height; applyView(); }
+  }
+});
+const endPtr=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; if(!ptrs.size) map.classList.remove('dragging'); };
+window.addEventListener('pointerup',endPtr); window.addEventListener('pointercancel',endPtr);
+
 $('t-counties').onchange=e=>gCounties.style.display=e.target.checked?'':'none';
 $('t-cwa').onchange=e=>gCwa.style.display=e.target.checked?'':'none';
+$('t-cnames').onchange=()=>applyView();
 
 // ---------- Placing a check-in from its free-text location ----------
 function clean(loc){
@@ -196,50 +290,95 @@ function clean(loc){
   return s.replace(/\s+/g,' ').trim();
 }
 function geocode(loc){
-  const k=clean(loc);
-  if(Object.prototype.hasOwnProperty.call(PLACES.places,k)){
-    const c=PLACES.places[k];
-    return {lat:c[0],lon:c[1],lvl:PLACES.countyLevel.includes(k)?'county':'city'};
+  const key=clean(loc);
+  if(Object.prototype.hasOwnProperty.call(PLACES.places,key)){
+    const c=PLACES.places[key];
+    return {lat:c[0],lon:c[1],lvl:PLACES.countyLevel.includes(key)?'county':'city'};
   }
   return null;
 }
 
 // ---------- State ----------
-let pts=[], review=[], now=0, t0=0, t1=0, mode='hist', playing=false, last=0, seen={};
+let pts=[], review=[], now=0, t0=0, t1=0, mode='hist', playing=false, last=0, lastN=-1, lastLayout=[];
 const tip=$('tip'), wrap=$('mapwrap');
 const fmt=ms=>new Date(ms).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'});
 const speed=()=>+$('speed').value;
 
-function showTip(e,p){
-  tip.innerHTML='<b class="mono">'+esc(p.c)+'</b> <span>'+esc(p.loc)+' · '+fmt(p.ms)+'</span>';
-  tip.style.display='block';
+function showTip(e,html){
+  tip.innerHTML=html; tip.style.display='block';
   const r=wrap.getBoundingClientRect();
   let x=e.clientX-r.left+14, y=e.clientY-r.top-34;
   if(x+tip.offsetWidth>r.width-6) x=e.clientX-r.left-tip.offsetWidth-14;
   tip.style.left=x+'px'; tip.style.top=Math.max(4,y)+'px';
 }
-// Pins that share a town are fanned out slightly so every callsign stays hoverable.
+const pinTip=p=>'<b class="mono">'+esc(p.c)+'</b> <span>'+esc(p.loc)+' · '+fmt(p.ms)+'</span>';
+function clusterTip(c){
+  const names=c.members.map(m=>m.c); const shown=names.slice(0,14).map(esc).join(', ');
+  return '<b>'+names.length+' stations</b><br><span class="mono">'+shown+(names.length>14?' +'+(names.length-14)+' more':'')+'</span><br><span>Click to zoom in</span>';
+}
 function place(p){
-  const k=p.lat+','+p.lon; const n=seen[k]=(seen[k]||0)+1; p.n=n-1;
-  const a=p.n*2.4, r=p.n?5+p.n*1.6:0;
-  p.x=X(p.lon)+Math.cos(a)*r; p.y=Y(p.lat)+Math.sin(a)*r; p.el=null;
-  p.off=p.x<4||p.x>W-4||p.y<4||p.y>H-4;
+  p.off=X(p.lon)<4||X(p.lon)>W-4||Y(p.lat)<4||Y(p.lat)>H-4;
+  p.shown=false;
 }
-function add(p,pulse){
-  if(p.el||p.off) return;
-  const c=document.createElementNS(NS,'circle');
-  c.setAttribute('cx',p.x); c.setAttribute('cy',p.y); c.setAttribute('r',6);
-  c.setAttribute('class','dot'+(p.lvl==='county'?' county':'')); c.setAttribute('tabindex','0');
-  c.setAttribute('aria-label',p.c+', '+p.loc);
-  c.addEventListener('mousemove',e=>showTip(e,p));
-  c.addEventListener('mouseleave',()=>tip.style.display='none');
-  c.addEventListener('focus',()=>{const b=c.getBoundingClientRect();showTip({clientX:b.x+b.width,clientY:b.y},p)});
-  c.addEventListener('blur',()=>tip.style.display='none');
-  dots.appendChild(c); p.el=c;
-  if(pulse){const g=document.createElementNS(NS,'circle');g.setAttribute('cx',p.x);g.setAttribute('cy',p.y);g.setAttribute('r',6);g.setAttribute('class','ring');dots.appendChild(g);setTimeout(()=>g.remove(),1500);}
+
+// ---------- Drawing the pins for the current zoom ----------
+// Stations in the same town share one coordinate. Zoomed out they merge into a numbered circle with their
+// neighbours; from ZFAN upward the stations of a town fan out around the town centre, one pin each, so every
+// callsign can be hovered.
+function drawPins(vis,newly){
+  dots.innerHTML='';
+  const groups=new Map();
+  vis.forEach(p=>{ if(p.off) return; const key=p.lat+','+p.lon; if(!groups.has(key)) groups.set(key,[]); groups.get(key).push(p); });
+  const items=[];
+  groups.forEach(ms=>{
+    const bx=X(ms[0].lon), by=Y(ms[0].lat);
+    if(k>=ZFAN&&ms.length>1){
+      const R=Math.max(12,ms.length*2.9)/k;
+      ms.forEach((p,i)=>{ const a=-Math.PI/2+i*2*Math.PI/ms.length; items.push({x:bx+Math.cos(a)*R,y:by+Math.sin(a)*R,members:[p]}); });
+    } else items.push({x:bx,y:by,members:ms.slice()});
+  });
+  const CL=15/k, clusters=[];
+  items.forEach(it=>{
+    const c=clusters.find(c=>Math.hypot(c.x-it.x,c.y-it.y)<CL);
+    if(c){ const n=c.members.length,m=it.members.length; c.x=(c.x*n+it.x*m)/(n+m); c.y=(c.y*n+it.y*m)/(n+m); c.members.push(...it.members); }
+    else clusters.push({x:it.x,y:it.y,members:it.members.slice()});
+  });
+  lastLayout=clusters;
+  clusters.forEach(drawItem);
+  if(newly&&newly.length) pulseFor(newly);
 }
-function remove(p){ if(p.el){p.el.remove();p.el=null;} }
-function clearMap(){ dots.innerHTML=''; pts.forEach(p=>p.el=null); }
+const bubR=n=>(9+2.6*Math.sqrt(n))/k;
+function drawItem(c){
+  const m=c.members;
+  if(m.length===1){
+    const p=m[0];
+    const d=el('circle',{cx:c.x,cy:c.y,r:6/k,class:'dot'+(p.lvl==='county'?' county':''),tabindex:0,'aria-label':p.c+', '+p.loc});
+    d.addEventListener('mousemove',e=>{ if(!dragMoved) showTip(e,pinTip(p)); });
+    d.addEventListener('mouseleave',()=>tip.style.display='none');
+    d.addEventListener('focus',()=>{const b=d.getBoundingClientRect(); showTip({clientX:b.x+b.width,clientY:b.y},pinTip(p));});
+    d.addEventListener('blur',()=>tip.style.display='none');
+    dots.appendChild(d);
+  } else {
+    const same=m.every(q=>q.lat===m[0].lat&&q.lon===m[0].lon);
+    const go=()=>{ tip.style.display='none'; viewOn(c.x,c.y,same?Math.max(k*1.5,ZFAN+.5):k*2.2); };
+    const g=el('g',{});
+    const b=el('circle',{cx:c.x,cy:c.y,r:bubR(m.length),class:'bub',tabindex:0,'aria-label':m.length+' stations, press Enter to zoom in'});
+    const t=el('text',{x:c.x,y:c.y,class:'bubn','font-size':(11+(m.length>9?1:0))/k}); t.textContent=m.length;
+    b.addEventListener('mousemove',e=>{ if(!dragMoved) showTip(e,clusterTip(c)); });
+    b.addEventListener('mouseleave',()=>tip.style.display='none');
+    b.addEventListener('click',()=>{ if(!dragMoved) go(); });
+    b.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+    g.appendChild(b); g.appendChild(t); dots.appendChild(g);
+  }
+}
+function pulseFor(list){
+  list.forEach(p=>{
+    const c=lastLayout.find(c=>c.members.includes(p)); if(!c) return;
+    const r=c.members.length===1?6/k:bubR(c.members.length);
+    const g=el('circle',{cx:c.x,cy:c.y,r,class:'ring'}); dots.appendChild(g); setTimeout(()=>g.remove(),1500);
+  });
+}
+function clearMap(){ dots.innerHTML=''; pts.forEach(p=>p.shown=false); lastN=-1; dirty=true; }
 
 function sidebar(){
   const offPts=pts.filter(p=>p.off);
@@ -248,23 +387,25 @@ function sidebar(){
   $('review').innerHTML=review.map(r=>'<li><span class="mono">'+esc(r.c)+'</span> — “'+esc(r.loc)+'”</li>').join('')||'<li class="sub">None</li>';
 }
 function render(pulse){
-  let n=0; const recent=[];
-  pts.forEach(p=>{ if(p.ms<=now){ add(p,pulse&&p.ms>now-4000*speed()); n++; recent.push(p);} else remove(p); });
-  $('count').textContent=n;
-  $('latest').innerHTML=recent.slice(-6).reverse().map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">Waiting for first check-in…</li>';
+  const vis=pts.filter(p=>p.ms<=now);
+  const newly=[];
+  pts.forEach(p=>{ const s=p.ms<=now; if(s&&!p.shown&&pulse&&p.ms>now-4000*speed()) newly.push(p); p.shown=s; });
+  $('count').textContent=vis.length;
+  $('latest').innerHTML=vis.slice(-6).reverse().map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">Waiting for first check-in…</li>';
   if(mode==='hist'){ $('clock').textContent=pts.length?fmt(Math.max(now,t0))+' Central':''; $('scrub').value=Math.max(0,now-t0); }
+  if(dirty||vis.length!==lastN||newly.length){ drawPins(vis,newly); lastN=vis.length; dirty=false; }
 }
 
 // ---------- Historical mode ----------
 function loadNet(net){
-  playing=false; $('play').textContent='Play'; clearMap(); seen={};
+  playing=false; $('play').textContent='Play';
   pts=net.pts.map(p=>({...p,ms:Date.parse(p.t)})).sort((a,b)=>a.ms-b.ms);
   review=net.review.slice();
   pts.forEach(place);
   t0=pts.length?pts[0].ms:0; t1=pts.length?pts[pts.length-1].ms:0;
   $('scrub').max=Math.max(0,t1-t0); now=t0-1;
-  $('netname').textContent=(net.net||'Net')+' · '+(mode==='hist'?'replay of a completed net':'');
-  sidebar(); render(false);
+  $('netname').textContent=(net.net||'Net')+' · replay of a completed net';
+  clearMap(); sidebar(); render(false);
 }
 function parseCSV(text){
   const rows=[]; let row=[], f='', q=false;
@@ -298,9 +439,8 @@ function netFromCSV(text){
 $('file').onchange=async e=>{
   const f=e.target.files[0]; if(!f) return;
   try{ loadNet(netFromCSV(await f.text())); }
-  catch(err){ alert_(err.message); }
+  catch(err){ $('netname').textContent=err.message; }
 };
-function alert_(m){ $('netname').textContent=m; }
 $('usesample').onclick=()=>{ $('file').value=''; loadNet(SAMPLE); };
 
 function tick(ts){
@@ -313,7 +453,7 @@ function tick(ts){
 }
 $('play').onclick=()=>{
   if(!pts.length) return;
-  if(now>=t1) now=t0-1;
+  if(now>=t1){ now=t0-1; clearMap(); }
   playing=!playing; last=0; $('play').textContent=playing?'Pause':'Play';
   if(playing) requestAnimationFrame(tick);
 };
@@ -331,7 +471,7 @@ function addLiveCheckin(e){
   const g=geocode(loc);
   if(!g){ review.push({c,loc,t:new Date(ms).toISOString()}); sidebar(); return; }
   const p={c,loc,lat:g.lat,lon:g.lon,lvl:g.lvl,t:new Date(ms).toISOString(),ms};
-  place(p); pts.push(p); sidebar(); render(false); add(p,true);
+  place(p); pts.push(p); sidebar(); render(false); pulseFor([p]);
 }
 window.addLiveCheckin=addLiveCheckin;
 function netIdFrom(s){ const m=String(s).match(/[0-9a-f]{24}/i); return m?m[0].toLowerCase():null; }
@@ -348,10 +488,9 @@ function setMode(m){
   $('mode-hist').setAttribute('aria-checked',m==='hist'); $('mode-live').setAttribute('aria-checked',m==='live');
   $('hist-panel').classList.toggle('hidden',m!=='hist'); $('live-panel').classList.toggle('hidden',m!=='live');
   $('livedot').style.background=m==='live'?'#fff':'';
-  clearMap(); seen={};
   if(m==='hist'){ loadNet(SAMPLE); }
   else{
-    pts=[]; review=[]; now=Infinity; $('netname').textContent='Live net · waiting for a connection';
+    pts=[]; review=[]; now=Infinity; clearMap(); $('netname').textContent='Live net · waiting for a connection';
     $('livestatus').innerHTML='<b>Not connected.</b> Enter a Net ID or live net link above.';
     sidebar(); render(false);
   }
@@ -359,6 +498,7 @@ function setMode(m){
 $('mode-hist').onclick=()=>setMode('hist');
 $('mode-live').onclick=()=>setMode('live');
 setMode('hist');
+applyView();
 </script>
 </body>
 </html>

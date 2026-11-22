@@ -39,3 +39,10 @@ Open `docs/index.html` in a browser.
 
 - County and state outlines: US Census Bureau, via the `us-atlas` npm package.
 - County Warning Areas: National Weather Service shapefile (`w_16ap26`, valid 16 April 2026), https://www.weather.gov/gis/CWABounds
+
+## Zoom and clustering
+
+- Scroll wheel, pinch, the + / − buttons or double-click to zoom; drag to pan. **Fit** zooms to the check-ins, **All** shows the whole state.
+- Stations close together merge into a numbered circle; hover it to list the callsigns, click to zoom in. From about 5× zoom, stations in the same town fan out so each callsign can be hovered.
+- Boundary detail follows zoom: CWA lines are boldest zoomed out, county lines strengthen as you zoom in, and county names appear from 2× (if the County names box is ticked).
+- Counties are Census 1:10M generalized boundaries, so edges look coarse near the 12× maximum zoom.
