@@ -35,6 +35,9 @@
   .cname{fill:var(--ink);font-size:var(--cnf,9px);text-anchor:middle;dominant-baseline:middle;pointer-events:none;paint-order:stroke;stroke:var(--state);stroke-width:var(--cnh,2.2px);stroke-linejoin:round;opacity:.88}
   .tg{display:flex;gap:14px;font-size:13px;padding:8px 12px 0;flex-wrap:wrap}
   .tg label{cursor:pointer}
+  .tg select{padding:2px 6px;font-size:13px}
+  #shadekey{display:none;align-items:center;gap:8px;font-size:12px;color:var(--mute);padding:6px 12px 0}
+  #shadekey .bar{width:150px;height:10px;border-radius:5px;border:1px solid var(--line);background:linear-gradient(90deg,rgba(13,148,136,.1),rgba(13,148,136,.8))}
   .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2px;cursor:pointer;opacity:.95;vector-effect:non-scaling-stroke}
   .dot.county{fill:#7c3aed}
   .dot:hover,.dot:focus{stroke-width:2.5px;opacity:1;outline:none}
@@ -101,7 +104,14 @@
       <label><input type="checkbox" id="t-counties" checked> County outlines</label>
       <label><input type="checkbox" id="t-cnames" checked> County names <span class="sub">(appear when zoomed in)</span></label>
       <label><input type="checkbox" id="t-cwa" checked> NWS County Warning Areas</label>
+      <label><input type="checkbox" id="t-shade"> County shading</label>
+      <select id="shademetric" aria-label="Shade counties by" disabled>
+        <option value="rate">Check-ins per 100 licensed hams</option>
+        <option value="checkins">Check-ins</option>
+        <option value="lic">Licensed hams</option>
+      </select>
     </div>
+    <div id="shadekey"><span id="sk-lo"></span><span class="bar"></span><span id="sk-hi"></span><span id="sk-note"></span></div>
     <div class="key">
       <span><i style="background:var(--accent)"></i>Station</span>
       <span><i style="background:#7c3aed"></i>County-level location (approximate)</span>
@@ -145,6 +155,11 @@
       <h2>Latest</h2>
       <ul id="latest"></ul>
     </div>
+    <div class="card hidden" id="gapcard">
+      <h2>Biggest participation gaps</h2>
+      <ul id="gaps"></ul>
+      <div class="note">Counties with at least 50 licensed hams, fewest check-ins per licensee first. Licensee counts are FCC totals by ZIP, so they are approximate near county lines. A licensee is not necessarily a Skywarn spotter.</div>
+    </div>
     <div class="card">
       <h2>Outside the map frame</h2>
       <ul id="offlist"></ul>
@@ -162,6 +177,7 @@ const SAMPLE = __DATA__;
 const GEO = __GEO__;
 const CWA = __CWA__;
 const PLACES = __PLACES__;
+const LIC = __LIC__;   // licensed amateurs per Arkansas county (totals only)
 const NS = 'http://www.w3.org/2000/svg';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $ = id => document.getElementById(id);
@@ -178,10 +194,11 @@ const map=$('map');
 const world=el('g',{id:'world'}); map.appendChild(world);
 function path(rings){return rings.map(r=>'M'+r.map(p=>X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('L')+'Z').join('')}
 function layer(id){const g=el('g',{id}); world.appendChild(g); return g}
-function addPath(g,d,cls,title){const p=el('path',{d,class:cls}); if(title){const t=el('title',{}); t.textContent=title; p.appendChild(t)} g.appendChild(p)}
+function addPath(g,d,cls,title){const p=el('path',{d,class:cls}); if(title){const t=el('title',{}); t.textContent=title; p.appendChild(t)} g.appendChild(p); return p}
 const gNeighbors=layer('neighbors'), gCounties=layer('counties'), gCwa=layer('cwa'), gState=layer('arstate'), gNames=layer('cnames');
 GEO.states.forEach(s=>{ if(s.f!=='05') addPath(gNeighbors,path(s.r),'nstate'); });
-GEO.counties.forEach(c=>{ const ar=c.f.startsWith('05'); addPath(gCounties,path(c.r),ar?'county':'county out',ar?c.n+' County':null); });
+const cty={};   // county name -> {el, rings}
+GEO.counties.forEach(c=>{ const ar=c.f.startsWith('05'); const e=addPath(gCounties,path(c.r),ar?'county':'county out',ar?c.n+' County':null); if(ar) cty[c.n]={el:e,rings:c.r}; });
 CWA.forEach(w=>addPath(gCwa,path(w.r),'cwa'));
 CWA.forEach(w=>{ if(w.lx==null) return; const t=el('text',{x:X(w.lx),y:Y(w.ly),class:'cwalbl'}); t.textContent=w.id; gCwa.appendChild(t); });
 GEO.states.filter(s=>s.f==='05').forEach(s=>addPath(gState,path(s.r),'state'));
@@ -316,7 +333,10 @@ function clusterTip(c){
   const names=c.members.map(m=>m.c); const shown=names.slice(0,14).map(esc).join(', ');
   return '<b>'+names.length+' stations</b><br><span class="mono">'+shown+(names.length>14?' +'+(names.length-14)+' more':'')+'</span><br><span>Click to zoom in</span>';
 }
+function inRing(x,y,r){ let ins=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi) ins=!ins; } return ins; }
+function countyOf(lat,lon){ for(const n in cty) if(cty[n].rings.some(r=>inRing(lon,lat,r))) return n; return null; }
 function place(p){
+  p.county=countyOf(p.lat,p.lon);
   p.off=X(p.lon)<4||X(p.lon)>W-4||Y(p.lat)<4||Y(p.lat)>H-4;
   p.shown=false;
 }
@@ -386,11 +406,35 @@ function sidebar(){
   $('offlist').innerHTML=offPts.map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">None</li>';
   $('review').innerHTML=review.map(r=>'<li><span class="mono">'+esc(r.c)+'</span> — “'+esc(r.loc)+'”</li>').join('')||'<li class="sub">None</li>';
 }
+// ---------- County shading and participation gaps ----------
+const shadeOn=()=>$('t-shade').checked;
+function shadeCounties(vis){
+  const on=shadeOn(), metric=$('shademetric').value, chk={};
+  vis.forEach(p=>{ if(p.county) chk[p.county]=(chk[p.county]||0)+1; });
+  const val=n=>metric==='lic'?LIC[n]:metric==='checkins'?(chk[n]||0):(LIC[n]?(chk[n]||0)/LIC[n]*100:0);
+  const names=Object.keys(cty), max=Math.max(1e-9,...names.map(val));
+  names.forEach(n=>{
+    const e=cty[n].el, v=val(n);
+    e.style.fill=on&&v>0?'rgba(13,148,136,'+(0.1+0.7*Math.sqrt(v/max)).toFixed(3)+')':'';
+    e.firstChild.textContent=n+' County: '+LIC[n]+' licensed hams, '+(chk[n]||0)+' check-in'+((chk[n]||0)===1?'':'s');
+  });
+  $('shadekey').style.display=on?'flex':'none';
+  $('gapcard').classList.toggle('hidden',!on);
+  if(!on) return;
+  const fmtv=v=>metric==='rate'?v.toFixed(1):Math.round(v);
+  $('sk-lo').textContent='0'; $('sk-hi').textContent=fmtv(max)+(metric==='rate'?' per 100 hams':metric==='lic'?' hams':' check-ins');
+  $('sk-note').textContent=metric==='lic'?'':'· unshaded = no check-ins';
+  const gaps=names.filter(n=>LIC[n]>=50).sort((a,b)=>((chk[a]||0)/LIC[a])-((chk[b]||0)/LIC[b])||LIC[b]-LIC[a]).slice(0,8);
+  $('gaps').innerHTML=gaps.map(n=>'<li><b>'+esc(n)+'</b> <span class="sub">— '+LIC[n]+' hams, '+(chk[n]||0)+' check-in'+((chk[n]||0)===1?'':'s')+'</span></li>').join('');
+}
+$('t-shade').onchange=()=>{ $('shademetric').disabled=!shadeOn(); dirty=true; render(false); };
+$('shademetric').onchange=()=>render(false);
 function render(pulse){
   const vis=pts.filter(p=>p.ms<=now);
   const newly=[];
   pts.forEach(p=>{ const s=p.ms<=now; if(s&&!p.shown&&pulse&&p.ms>now-4000*speed()) newly.push(p); p.shown=s; });
   $('count').textContent=vis.length;
+  shadeCounties(vis);
   $('latest').innerHTML=vis.slice(-6).reverse().map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">Waiting for first check-in…</li>';
   if(mode==='hist'){ $('clock').textContent=pts.length?fmt(Math.max(now,t0))+' Central':''; $('scrub').value=Math.max(0,now-t0); }
   if(dirty||vis.length!==lastN||newly.length){ drawPins(vis,newly); lastN=vis.length; dirty=false; }

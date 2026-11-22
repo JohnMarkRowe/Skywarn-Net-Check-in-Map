@@ -46,3 +46,7 @@ Open `docs/index.html` in a browser.
 - Stations close together merge into a numbered circle; hover it to list the callsigns, click to zoom in. From about 5× zoom, stations in the same town fan out so each callsign can be hovered.
 - Boundary detail follows zoom: CWA lines are boldest zoomed out, county lines strengthen as you zoom in, and county names appear from 2× (if the County names box is ticked).
 - Counties are Census 1:10M generalized boundaries, so edges look coarse near the 12× maximum zoom.
+
+## County shading and participation gaps
+
+Tick **County shading** to colour counties by check-ins per 100 licensed hams, raw check-ins, or licensed hams. A "Biggest participation gaps" list ranks counties with 50+ licensees by fewest check-ins per licensee. Licensee totals come from `data/licensees_by_county.json`, made by `scripts/licensees_by_county.py` from an FCC amateur licensee CSV (county totals only; the raw file is never committed).
