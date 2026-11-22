@@ -50,3 +50,7 @@ Open `docs/index.html` in a browser.
 ## County shading and participation gaps
 
 Tick **County shading** to colour counties by check-ins per 100 licensed hams, raw check-ins, or licensed hams. A "Biggest participation gaps" list ranks counties with 50+ licensees by fewest check-ins per licensee. Licensee totals come from `data/licensees_by_county.json`, made by `scripts/licensees_by_county.py` from an FCC amateur licensee CSV (county totals only; the raw file is never committed).
+
+## AUXCOMM-trained layer
+
+Tick **AUXCOMM-trained** to show a square badge with the number of trained people in each county, and to add them to the shading options and the gap list. Counts come from `data/auxcomm_by_county.json`, made by `scripts/auxcomm_by_county.py` from the class roster (.xlsx, never committed). People are placed by home ZIP, or by the county in their organization name when no ZIP is listed; state-level groups are left unplaced.

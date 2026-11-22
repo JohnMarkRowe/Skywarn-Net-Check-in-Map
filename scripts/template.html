@@ -36,6 +36,8 @@
   .tg{display:flex;gap:14px;font-size:13px;padding:8px 12px 0;flex-wrap:wrap}
   .tg label{cursor:pointer}
   .tg select{padding:2px 6px;font-size:13px}
+  .auxb{fill:var(--ink);stroke:var(--card);stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:default}
+  .auxn{fill:var(--card);font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
   #shadekey{display:none;align-items:center;gap:8px;font-size:12px;color:var(--mute);padding:6px 12px 0}
   #shadekey .bar{width:150px;height:10px;border-radius:5px;border:1px solid var(--line);background:linear-gradient(90deg,rgba(13,148,136,.1),rgba(13,148,136,.8))}
   .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2px;cursor:pointer;opacity:.95;vector-effect:non-scaling-stroke}
@@ -104,11 +106,13 @@
       <label><input type="checkbox" id="t-counties" checked> County outlines</label>
       <label><input type="checkbox" id="t-cnames" checked> County names <span class="sub">(appear when zoomed in)</span></label>
       <label><input type="checkbox" id="t-cwa" checked> NWS County Warning Areas</label>
+      <label><input type="checkbox" id="t-aux"> AUXCOMM-trained <span class="sub">(■ count per county)</span></label>
       <label><input type="checkbox" id="t-shade"> County shading</label>
       <select id="shademetric" aria-label="Shade counties by" disabled>
         <option value="rate">Check-ins per 100 licensed hams</option>
         <option value="checkins">Check-ins</option>
         <option value="lic">Licensed hams</option>
+        <option value="aux">AUXCOMM-trained people</option>
       </select>
     </div>
     <div id="shadekey"><span id="sk-lo"></span><span class="bar"></span><span id="sk-hi"></span><span id="sk-note"></span></div>
@@ -155,6 +159,12 @@
       <h2>Latest</h2>
       <ul id="latest"></ul>
     </div>
+    <div class="card hidden" id="auxcard">
+      <h2>AUXCOMM-trained</h2>
+      <div class="count" id="auxcount">0</div>
+      <div class="sub" id="auxsub"></div>
+      <div class="note">From the class roster, counted by home ZIP or, where none is listed, the county of the person's organization. Counts only; names and contact details are not on this page.</div>
+    </div>
     <div class="card hidden" id="gapcard">
       <h2>Biggest participation gaps</h2>
       <ul id="gaps"></ul>
@@ -177,6 +187,7 @@ const SAMPLE = __DATA__;
 const GEO = __GEO__;
 const CWA = __CWA__;
 const PLACES = __PLACES__;
+const AUX = __AUX__;   // AUXCOMM-trained people per county (totals only)
 const LIC = __LIC__;   // licensed amateurs per Arkansas county (totals only)
 const NS = 'http://www.w3.org/2000/svg';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -213,11 +224,27 @@ function centroid(ring){
 }
 GEO.counties.filter(c=>c.f.startsWith('05')).forEach(c=>{
   const big=c.r.reduce((m,r)=>r.length>m.length?r:m,c.r[0]);
-  const [x,y]=centroid(big);
+  const [x,y]=centroid(big); if(cty[c.n]){cty[c.n].cx=x; cty[c.n].cy=y;}
   const t=el('text',{x:x.toFixed(1),y:y.toFixed(1),class:'cname'}); t.textContent=c.n; gNames.appendChild(t);
 });
+const gAux=layer('aux');
 const dots=layer('pins');
 
+// ---------- AUXCOMM-trained badges (one square per county, constant screen size) ----------
+function drawAux(){
+  gAux.innerHTML='';
+  if(!$('t-aux').checked) return;
+  Object.keys(cty).forEach(n=>{
+    const v=AUX[n], c=cty[n]; if(!v||c.cx==null) return;
+    const s=(v>9?20:17)/k, x=c.cx, y=c.cy-13/k;
+    const g=el('g',{});
+    const r=el('rect',{x:x-s/2,y:y-s/2,width:s,height:s,rx:3/k,class:'auxb'});
+    const t=el('text',{x,y,class:'auxn','font-size':(v>9?11:10.5)/k}); t.textContent=v;
+    r.addEventListener('mousemove',e=>{ if(!dragMoved) showTip(e,'<b>'+esc(n)+' County</b><br><span>'+v+' AUXCOMM-trained</span>'); });
+    r.addEventListener('mouseleave',()=>tip.style.display='none');
+    g.appendChild(r); g.appendChild(t); gAux.appendChild(g);
+  });
+}
 // ---------- Zoom and pan ----------
 const MINK=1, MAXK=12, ZFAN=5;      // ZFAN: zoom at which stations in the same town fan out individually
 let k=1, tx=0, ty=0, dirty=true, anim=null;
@@ -238,7 +265,7 @@ function applyView(){
   st.setProperty('--cnf',((k<3?9:11)/k)+'px'); st.setProperty('--cnh',(2.4/k)+'px');
   gNames.style.display=(k>=2&&$('t-cnames').checked)?'':'none';
   $('zread').textContent='Zoom '+(k<10?k.toFixed(1):Math.round(k))+'× · '+(k<2?'CWAs + counties':k<5?'CWAs + counties + names':'close view');
-  dirty=true; tip.style.display='none'; render(false);
+  drawAux(); dirty=true; tip.style.display='none'; render(false);
 }
 function animateTo(nk,ntx,nty,ms=240){
   cancelAnimationFrame(anim);
@@ -298,6 +325,7 @@ window.addEventListener('pointerup',endPtr); window.addEventListener('pointercan
 $('t-counties').onchange=e=>gCounties.style.display=e.target.checked?'':'none';
 $('t-cwa').onchange=e=>gCwa.style.display=e.target.checked?'':'none';
 $('t-cnames').onchange=()=>applyView();
+$('t-aux').onchange=()=>{ drawAux(); sidebarAux(); };
 
 // ---------- Placing a check-in from its free-text location ----------
 function clean(loc){
@@ -406,26 +434,31 @@ function sidebar(){
   $('offlist').innerHTML=offPts.map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">None</li>';
   $('review').innerHTML=review.map(r=>'<li><span class="mono">'+esc(r.c)+'</span> — “'+esc(r.loc)+'”</li>').join('')||'<li class="sub">None</li>';
 }
+function sidebarAux(){
+  const on=$('t-aux').checked; $('auxcard').classList.toggle('hidden',!on); if(!on) return;
+  const tot=Object.values(AUX).reduce((a,b)=>a+b,0), cn=Object.values(AUX).filter(v=>v).length;
+  $('auxcount').textContent=tot; $('auxsub').textContent='placed in '+cn+' of 75 counties';
+}
 // ---------- County shading and participation gaps ----------
 const shadeOn=()=>$('t-shade').checked;
 function shadeCounties(vis){
   const on=shadeOn(), metric=$('shademetric').value, chk={};
   vis.forEach(p=>{ if(p.county) chk[p.county]=(chk[p.county]||0)+1; });
-  const val=n=>metric==='lic'?LIC[n]:metric==='checkins'?(chk[n]||0):(LIC[n]?(chk[n]||0)/LIC[n]*100:0);
+  const val=n=>metric==='aux'?(AUX[n]||0):metric==='lic'?LIC[n]:metric==='checkins'?(chk[n]||0):(LIC[n]?(chk[n]||0)/LIC[n]*100:0);
   const names=Object.keys(cty), max=Math.max(1e-9,...names.map(val));
   names.forEach(n=>{
     const e=cty[n].el, v=val(n);
     e.style.fill=on&&v>0?'rgba(13,148,136,'+(0.1+0.7*Math.sqrt(v/max)).toFixed(3)+')':'';
-    e.firstChild.textContent=n+' County: '+LIC[n]+' licensed hams, '+(chk[n]||0)+' check-in'+((chk[n]||0)===1?'':'s');
+    e.firstChild.textContent=n+' County: '+LIC[n]+' licensed hams, '+(AUX[n]||0)+' AUXCOMM-trained, '+(chk[n]||0)+' check-in'+((chk[n]||0)===1?'':'s');
   });
   $('shadekey').style.display=on?'flex':'none';
   $('gapcard').classList.toggle('hidden',!on);
   if(!on) return;
   const fmtv=v=>metric==='rate'?v.toFixed(1):Math.round(v);
-  $('sk-lo').textContent='0'; $('sk-hi').textContent=fmtv(max)+(metric==='rate'?' per 100 hams':metric==='lic'?' hams':' check-ins');
-  $('sk-note').textContent=metric==='lic'?'':'· unshaded = no check-ins';
+  $('sk-lo').textContent='0'; $('sk-hi').textContent=fmtv(max)+(metric==='rate'?' per 100 hams':metric==='lic'?' hams':metric==='aux'?' trained':' check-ins');
+  $('sk-note').textContent=(metric==='lic')?'':metric==='aux'?'· unshaded = none trained':'· unshaded = no check-ins';
   const gaps=names.filter(n=>LIC[n]>=50).sort((a,b)=>((chk[a]||0)/LIC[a])-((chk[b]||0)/LIC[b])||LIC[b]-LIC[a]).slice(0,8);
-  $('gaps').innerHTML=gaps.map(n=>'<li><b>'+esc(n)+'</b> <span class="sub">— '+LIC[n]+' hams, '+(chk[n]||0)+' check-in'+((chk[n]||0)===1?'':'s')+'</span></li>').join('');
+  $('gaps').innerHTML=gaps.map(n=>'<li><b>'+esc(n)+'</b> <span class="sub">— '+LIC[n]+' hams, '+(chk[n]||0)+' check-in'+((chk[n]||0)===1?'':'s')+', '+(AUX[n]||0)+' AUXCOMM-trained</span></li>').join('');
 }
 $('t-shade').onchange=()=>{ $('shademetric').disabled=!shadeOn(); dirty=true; render(false); };
 $('shademetric').onchange=()=>render(false);

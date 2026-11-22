@@ -6,3 +6,5 @@ node_modules/
 *.dbf
 *.prj
 __pycache__/
+*.xlsx
+*.xls
