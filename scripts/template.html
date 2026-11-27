@@ -184,6 +184,11 @@
       <h2>Latest</h2>
       <ul id="latest"></ul>
     </div>
+    <div class="card hidden" id="handcard">
+      <h2>Placed by net control</h2>
+      <ul id="handlist"></ul>
+      <div class="note" id="handnote"></div>
+    </div>
     <div class="card hidden" id="auxcard">
       <h2>AUXCOMM-trained</h2>
       <div class="count" id="auxcount">0</div>
@@ -462,7 +467,14 @@ function pulseFor(list){
 }
 function clearMap(){ dots.innerHTML=''; pts.forEach(p=>p.shown=false); lastN=-1; dirty=true; }
 
+function handList(){
+  const hs=pts.filter(p=>p.hand);
+  $('handcard').classList.toggle('hidden',!hs.length);
+  $('handlist').innerHTML=hs.map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+' <button class="mini" data-move="'+esc(p.c)+'">Move…</button><button class="mini" data-del="'+esc(p.c)+'">Remove</button></li>').join('');
+  $('handnote').textContent=mode==='live'?'Saved in this browser for 24 hours, so a reload will not lose them. Use Move… when a mobile station changes position.':'Placements made on a historical report are not saved.';
+}
 function sidebar(){
+  handList();
   const offPts=pts.filter(p=>p.off);
   $('of').textContent=(mode==='live'?'live · ':'')+'of '+pts.length+' placed'+(offPts.length?' · '+offPts.length+' outside the map frame':'');
   $('offlist').innerHTML=offPts.map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">None</li>';
@@ -615,12 +627,40 @@ function closeClar(){ pending=null; setPick(false); $('clar').classList.add('hid
 function finalize(c,loc,lat,lon,lvl,ms){
   review=review.filter(r=>r.c!==c); pts=pts.filter(p=>p.c!==c);          // a mobile station moving replaces its old pin
   const p={c,loc,lat,lon,lvl,hand:true,t:new Date(ms).toISOString(),ms}; place(p); pts.push(p); pts.sort((a,b)=>a.ms-b.ms);
+  saveManual();
   if(p.off){ sidebar(); mmsg('<b class="mono">'+esc(c)+'</b> is outside the Arkansas frame, so it is listed under “Outside the map frame”.'); return; }
   sidebar(); dirty=true; render(false); pulseFor([p]);
   mmsg('<b class="mono">'+esc(c)+'</b> placed at '+esc(loc)+'.');
 }
+const STORE='skywarnSpotters', KEEP_MS=24*3600*1000;
+function saveManual(){
+  if(mode!=='live') return;
+  try{ localStorage.setItem(STORE,JSON.stringify(pts.filter(p=>p.hand).map(p=>({c:p.c,loc:p.loc,lat:p.lat,lon:p.lon,lvl:p.lvl,ms:p.ms})))); }catch(e){}
+}
+function restoreManual(){
+  let list=[]; try{ list=JSON.parse(localStorage.getItem(STORE)||'[]'); }catch(e){}
+  list.filter(x=>x&&Date.now()-x.ms<KEEP_MS).forEach(x=>{ const p={...x,hand:true,t:new Date(x.ms).toISOString()}; place(p); pts.push(p); });
+  pts.sort((a,b)=>a.ms-b.ms); saveManual();
+}
+function removeSpot(c){ pts=pts.filter(p=>p.c!==c); saveManual(); sidebar(); dirty=true; render(false); mmsg('<b class="mono">'+esc(c)+'</b> removed.'); }
+function openMove(c){
+  closeClar(); const cur=pts.find(p=>p.c===c); if(!cur) return;
+  pending={c,loc:'',ms:stamp(),form:false};
+  const box=$('clar'); box.classList.remove('hidden');
+  box.innerHTML='<div><b>Move <span class="mono">'+esc(c)+'</span></b> (now at '+esc(cur.loc)+')</div>'+
+    '<div class="opts"><input type="text" id="mv-loc" placeholder="New location, e.g. Russellville" aria-label="New location"><button class="primary" id="mv-go">Move</button></div>'+
+    '<div class="opts"><button id="mv-pick">Click the new spot on the map</button><button id="mv-cancel">Cancel</button></div><div id="clar-note" class="note"></div>';
+  const go=()=>{ const loc=$('mv-loc').value.trim(); if(loc.length<2){ $('clar-note').textContent='Type the new location, or click it on the map.'; return; }
+    const g=geocode(loc); if(g){ closeClar(); finalize(c,loc,g.lat,g.lon,g.lvl,stamp()); } else openClar(c,loc,stamp(),false); };
+  $('mv-go').onclick=go; $('mv-loc').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+  $('mv-pick').onclick=()=>{ setPick(true); $('clar-note').innerHTML='<span class="pickbanner">Now click the new spot on the map. Press Esc to cancel.</span>'; };
+  $('mv-cancel').onclick=()=>{ closeClar(); mmsg('Not moved.'); };
+  $('mv-loc').focus(); box.scrollIntoView({block:'nearest'});
+}
+$('handlist').addEventListener('click',e=>{ const m=e.target.closest('[data-move]'), d=e.target.closest('[data-del]'); if(m) openMove(m.dataset.move); if(d) removeSpot(d.dataset.del); });
 function stamp(){ return mode==='live'?Date.now():Math.max(now,t0||0); }
-function resolveWith(r,remember){ if(!pending) return; const {c,loc,ms}=pending;
+function resolveWith(r,remember){ if(!pending) return; const {c,ms}=pending; let loc=pending.loc;
+  if(!loc){ const near=candidates().filter(x=>x.lvl!=='county').map(x=>({x,d:Math.hypot((x.lat-r.lat)*111,(x.lon-r.lon)*91)})).sort((a,b)=>a.d-b.d)[0]; loc=near?'Near '+near.x.label:'Chosen on map'; }
   if(remember) saveAlias(loc,r.lat,r.lon,r.lvl);
   const form=pending.form; closeClar(); finalize(c,loc,r.lat,r.lon,r.lvl,ms);
   if(form){ $('m-call').value=''; $('m-loc').value=''; } }
@@ -662,7 +702,7 @@ function setMode(m){
   $('livedot').style.background=m==='live'?'#fff':'';
   if(m==='hist'){ loadNet(SAMPLE); }
   else{
-    pts=[]; review=[]; now=Infinity; clearMap(); $('netname').textContent='Live net · waiting for a connection';
+    pts=[]; review=[]; now=Infinity; restoreManual(); clearMap(); $('netname').textContent='Live net · waiting for a connection';
     $('livestatus').innerHTML='<b>Not connected.</b> Enter a Net ID or live net link above.';
     sidebar(); render(false);
   }
