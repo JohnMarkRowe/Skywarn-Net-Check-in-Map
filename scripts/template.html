@@ -38,6 +38,12 @@
   .tg select{padding:2px 6px;font-size:13px}
   .auxb{fill:var(--ink);stroke:var(--card);stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:default}
   .auxn{fill:var(--card);font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+  #hwy path,.hwyl path{fill:none;pointer-events:none;stroke-linejoin:round}
+  .hwy-I{stroke:#d97706;stroke-width:2.4px;stroke-opacity:.95}
+  .hwy-US{stroke:#78716c;stroke-width:1.7px;stroke-opacity:.9}
+  .hwy-AR{stroke:#a8a29e;stroke-width:1.1px;stroke-opacity:.9}
+  .hl{font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none;paint-order:stroke;stroke:var(--card);stroke-linejoin:round}
+  .hl-I{fill:#b45309} .hl-US{fill:#57534e} .hl-AR{fill:#78716c}
   .dot.hand{stroke-dasharray:3 2;stroke:var(--ink)}
   #map.picking{cursor:crosshair}
   #manual{border-top:1px solid var(--line);padding:10px 12px}
@@ -118,6 +124,7 @@
       <label><input type="checkbox" id="t-counties" checked> County outlines</label>
       <label><input type="checkbox" id="t-cnames" checked> County names <span class="sub">(appear when zoomed in)</span></label>
       <label><input type="checkbox" id="t-cwa" checked> NWS County Warning Areas</label>
+      <label><input type="checkbox" id="t-hwy" checked> Highways <span class="sub">(interstate, US, state)</span></label>
       <label><input type="checkbox" id="t-aux"> AUXCOMM-trained <span class="sub">(■ count per county)</span></label>
       <label><input type="checkbox" id="t-shade"> County shading</label>
       <select id="shademetric" aria-label="Shade counties by" disabled>
@@ -164,7 +171,7 @@
     <!-- Net control: spotters not on Ham.Live -->
     <details id="manual" open>
       <summary>Add a spotter not on Ham.Live</summary>
-      <div class="note">For a mobile or away-from-home station. Type where they are (a town, a county, or a place name) and the map will place them. If the name is not recognized, it will ask you to confirm the spot. Dashed outline on a pin = placed by net control.</div>
+      <div class="note">For a mobile or away-from-home station. Type where they are: a town, a county, or a highway mile marker such as <b>I-40 MM 123</b>, <b>US 65 MM 40</b> or <b>AR 7 MM 20</b> (add EB/WB/NB/SB if you like). Interstate miles follow the exit numbers; US and state mile markers are approximate. If the name is not recognized, it will ask you to confirm the spot. Dashed outline on a pin = placed by net control. A position set here overrides the station's Ham.Live location and any registered (FCC/QRZ) address.</div>
       <div class="row">
         <input type="text" id="m-call" placeholder="Callsign" aria-label="Callsign" maxlength="12" autocomplete="off">
         <input type="text" id="m-loc" placeholder="Where are they? e.g. Mountain View, or Pope County" aria-label="Location" autocomplete="off">
@@ -217,6 +224,7 @@ const SAMPLE = __DATA__;
 const GEO = __GEO__;
 const CWA = __CWA__;
 const PLACES = __PLACES__;
+const HWY = __HWY__.routes;   // Arkansas interstates, US and state routes with mile values
 const AUX = __AUX__;   // AUXCOMM-trained people per county (totals only)
 const LIC = __LIC__;   // licensed amateurs per Arkansas county (totals only)
 const NS = 'http://www.w3.org/2000/svg';
@@ -236,7 +244,7 @@ const world=el('g',{id:'world'}); map.appendChild(world);
 function path(rings){return rings.map(r=>'M'+r.map(p=>X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('L')+'Z').join('')}
 function layer(id){const g=el('g',{id}); world.appendChild(g); return g}
 function addPath(g,d,cls,title){const p=el('path',{d,class:cls}); if(title){const t=el('title',{}); t.textContent=title; p.appendChild(t)} g.appendChild(p); return p}
-const gNeighbors=layer('neighbors'), gCounties=layer('counties'), gCwa=layer('cwa'), gState=layer('arstate'), gNames=layer('cnames');
+const gNeighbors=layer('neighbors'), gCounties=layer('counties'), gHwy=layer('hwy'), gCwa=layer('cwa'), gState=layer('arstate'), gNames=layer('cnames');
 GEO.states.forEach(s=>{ if(s.f!=='05') addPath(gNeighbors,path(s.r),'nstate'); });
 const cty={};   // county name -> {el, rings}
 GEO.counties.forEach(c=>{ const ar=c.f.startsWith('05'); const e=addPath(gCounties,path(c.r),ar?'county':'county out',ar?c.n+' County':null); if(ar) cty[c.n]={el:e,rings:c.r}; });
@@ -256,6 +264,15 @@ GEO.counties.filter(c=>c.f.startsWith('05')).forEach(c=>{
   const big=c.r.reduce((m,r)=>r.length>m.length?r:m,c.r[0]);
   const [x,y]=centroid(big); if(cty[c.n]){cty[c.n].cx=x; cty[c.n].cy=y;}
   const t=el('text',{x:x.toFixed(1),y:y.toFixed(1),class:'cname'}); t.textContent=c.n; gNames.appendChild(t);
+});
+// Highways: lines by class (state routes first so interstates draw on top); labels in their own layer above the county names.
+const gHL=layer('hwyl'), HWY_BY={}, hg={}, hl={};
+['AR','US','I'].forEach(c=>{ hg[c]=el('g',{}); gHwy.appendChild(hg[c]); hl[c]=el('g',{}); gHL.appendChild(hl[c]); });
+HWY.forEach(r=>{
+  HWY_BY[r.id]=r;
+  hg[r.cls].appendChild(el('path',{d:'M'+r.p.map(q=>X(q[0]).toFixed(1)+' '+Y(q[1]).toFixed(1)).join('L'),class:'hwy-'+r.cls}));
+  const m=r.p[Math.floor(r.p.length/2)], x=X(m[0]), y=Y(m[1]);
+  if(x>10&&x<W-10&&y>10&&y<H-10){ const t=el('text',{x:x.toFixed(1),y:y.toFixed(1),class:'hl hl-'+r.cls}); t.textContent=r.id; hl[r.cls].appendChild(t); }
 });
 const gAux=layer('aux');
 const dots=layer('pins');
@@ -294,6 +311,11 @@ function applyView(){
   st.setProperty('--cwf',(15/k)+'px'); st.setProperty('--cwh',(3/k)+'px');
   st.setProperty('--cnf',((k<3?9:11)/k)+'px'); st.setProperty('--cnh',(2.4/k)+'px');
   gNames.style.display=(k>=2&&$('t-cnames').checked)?'':'none';
+  const hw=$('t-hwy').checked; gHwy.style.display=gHL.style.display=hw?'':'none';
+  hg.US.style.display=k>=1.5?'':'none'; hg.AR.style.display=k>=2.5?'':'none';
+  hl.I.style.display=k>=1.3?'':'none'; hl.US.style.display=k>=3.5?'':'none'; hl.AR.style.display=k>=6?'':'none';
+  st.setProperty('--hlf',(9.5/k)+'px'); st.setProperty('--hlh',(2.6/k)+'px');
+  gHL.querySelectorAll('.hl').forEach(t=>{ t.style.fontSize=(9.5/k)+'px'; t.style.strokeWidth=(2.6/k)+'px'; });
   $('zread').textContent='Zoom '+(k<10?k.toFixed(1):Math.round(k))+'× · '+(k<2?'CWAs + counties':k<5?'CWAs + counties + names':'close view');
   drawAux(); dirty=true; tip.style.display='none'; render(false);
 }
@@ -355,6 +377,7 @@ window.addEventListener('pointerup',endPtr); window.addEventListener('pointercan
 $('t-counties').onchange=e=>gCounties.style.display=e.target.checked?'':'none';
 $('t-cwa').onchange=e=>gCwa.style.display=e.target.checked?'':'none';
 $('t-cnames').onchange=()=>applyView();
+$('t-hwy').onchange=()=>applyView();
 $('t-aux').onchange=()=>{ drawAux(); sidebarAux(); };
 
 // ---------- Placing a check-in from its free-text location ----------
@@ -368,7 +391,38 @@ const unX=x=>LON0+(x-offx)/(KX*S), unY=y=>LAT1-(y-offy)/S;
 const ALIASES=(()=>{ try{ return JSON.parse(localStorage.getItem('skywarnAliases')||'{}'); }catch(e){ return {}; } })();
 function saveAlias(loc,lat,lon,lvl){ ALIASES[clean(loc)]=[lat,lon,lvl]; try{ localStorage.setItem('skywarnAliases',JSON.stringify(ALIASES)); }catch(e){} }
 function countyCentre(n){ const c=cty[n]; return c&&c.cx!=null?{lat:unY(c.cy),lon:unX(c.cx),lvl:'county'}:null; }
-function geocode(loc){
+function routeAt(r,mm){
+  const p=r.p, lo=p[0][2], hi=p[p.length-1][2];
+  if(mm<lo-0.5||mm>hi+0.5) return null;
+  mm=Math.min(hi,Math.max(lo,mm));
+  for(let i=1;i<p.length;i++) if(mm<=p[i][2]){ const a=p[i-1],b=p[i],f=b[2]===a[2]?0:(mm-a[2])/(b[2]-a[2]); return [a[1]+(b[1]-a[1])*f,a[0]+(b[0]-a[0])*f]; }
+  const q=p[p.length-1]; return [q[1],q[0]];
+}
+// "I-40 MM 123 WB", "US 65 mile marker 40", "Hwy 7 mp 20", or just "MM 111" when ctx (the spotter's current route) is known.
+function hwyLookup(loc,ctx){
+  const s=' '+String(loc).toLowerCase()+' ';
+  const mmm=s.match(/(?:\bmm\b|mile\s*marker|mile\s*post|milepost|\bmp\b|\bmile\b|\bexit\b)\s*#?\s*(\d{1,3}(?:\.\d+)?)/)||s.match(/\b(\d{1,3}(?:\.\d+)?)\s*(?:mm|mile\s*marker|mile\s*post|milepost|mp)\b/)||(ctx?s.match(/^\s*#?(\d{1,3}(?:\.\d+)?)\s*$/):null);
+  if(!mmm) return null;
+  const mm=parseFloat(mmm[1]); let ids=[];
+  let m;
+  if((m=s.match(/\b(?:i|interstate)\s*-?\s*(\d{1,3})\b/))) ids=['I-'+m[1]];
+  else if((m=s.match(/\b(?:us|u\.s\.)\s*(?:hwy|highway|route|rt)?\s*-?\s*(\d{1,3})\b/))) ids=['US '+m[1]];
+  else if((m=s.match(/\b(?:ar|sh|state)\s*(?:hwy|highway|route|rt)?\s*-?\s*(\d{1,3})\b/))) ids=['AR '+m[1]];
+  else if((m=s.match(/\b(?:hwy|highway|route|rt)\s*-?\s*(\d{1,3})\b/))) ids=['US '+m[1],'AR '+m[1]];
+  else if(ctx) ids=[ctx];
+  else return null;
+  ids=ids.filter(id=>HWY_BY[id]); if(!ids.length) return {err:'I do not have that highway. Try I-40, US 65 or AR 7 followed by MM and the number.'};
+  const d=s.match(/\b(east|west|north|south)\s*bound\b|\b(eb|wb|nb|sb)\b/), dir=d?(d[1]?d[1][0].toUpperCase()+'B':d[2].toUpperCase()):'';
+  const mmTxt=String(mm).replace(/\.0+$/,'');
+  const hits=[]; let range='';
+  ids.forEach(id=>{ const r=HWY_BY[id], pos=routeAt(r,mm);
+    if(!pos){ range=id+' covers MM '+r.p[0][2]+' to MM '+r.p[r.p.length-1][2]+' in Arkansas.'; return; }
+    hits.push({id,lat:pos[0],lon:pos[1],approx:!r.ex,label:id+' MM '+mmTxt+(dir?' '+dir:'')}); });
+  return hits.length?{hits}:{err:range};
+}
+function geocode(loc,ctx){
+  const hh=hwyLookup(loc,ctx);
+  if(hh&&hh.hits&&hh.hits.length===1){ const x=hh.hits[0]; return {lat:x.lat,lon:x.lon,lvl:'route',route:x.id,approx:x.approx,label:x.label}; }
   const key=clean(loc);
   if(Object.prototype.hasOwnProperty.call(ALIASES,key)){ const a=ALIASES[key]; return {lat:a[0],lon:a[1],lvl:a[2]}; }
   const cm=key.match(/^(.+?) (county|co)$/);                      // "Pope County" / "Pope Co" -> county centre
@@ -395,7 +449,7 @@ function showTip(e,html){
   if(x+tip.offsetWidth>r.width-6) x=e.clientX-r.left-tip.offsetWidth-14;
   tip.style.left=x+'px'; tip.style.top=Math.max(4,y)+'px';
 }
-const pinTip=p=>'<b class="mono">'+esc(p.c)+'</b> <span>'+esc(p.loc)+' · '+fmt(p.ms)+(p.hand?' · placed by net control':'')+'</span>';
+const pinTip=p=>'<b class="mono">'+esc(p.c)+'</b> <span>'+esc(p.loc)+' · '+fmt(p.ms)+(p.hand?' · placed by net control':'')+(p.approx?' · approximate position along route':'')+'</span>';
 function clusterTip(c){
   const names=c.members.map(m=>m.c); const shown=names.slice(0,14).map(esc).join(', ');
   return '<b>'+names.length+' stations</b><br><span class="mono">'+shown+(names.length>14?' +'+(names.length-14)+' more':'')+'</span><br><span>Click to zoom in</span>';
@@ -589,6 +643,8 @@ $('scrub').oninput=()=>{now=t0+(+$('scrub').value);render(false);};
 // connection to a running Ham.Live net.
 function addLiveCheckin(e){
   const loc=(e.location||'').trim(), c=(e.callsign||'').trim(); if(!c) return;
+  // Position precedence for a callsign: net-control placement (mobile / away from home) > Ham.Live location >
+  // registered address (FCC/QRZ, if a lookup is ever added). A hand placement is never replaced by a later check-in.
   if(pts.some(p=>p.c===c)||review.some(r=>r.c===c)) return;      // each station once
   const ms=e.time?Date.parse(e.time):Date.now();
   const g=geocode(loc);
@@ -614,7 +670,9 @@ function candidates(){
   Object.keys(cty).forEach(n=>{ const c=countyCentre(n); if(c) out.push({label:n+' County',key:n.toLowerCase()+' county',lat:c.lat,lon:c.lon,lvl:'county'}); });
   return out.sort((a,b)=>a.label.localeCompare(b.label));
 }
-function suggestions(loc){
+function suggestions(loc,ctx){
+  const h=hwyLookup(loc,ctx);
+  if(h&&h.hits) return h.hits.map(x=>({label:x.label,lat:x.lat,lon:x.lon,lvl:'route',route:x.id,approx:x.approx}));
   const q=clean(loc).replace(/ (county|co)$/,''); if(!q) return [];
   return candidates().map(c=>{ const k=c.key.replace(/ county$/,''); const d=lev(q,k);
       const near=k.includes(q)||q.includes(k)?Math.min(d,1):d; return {c,d:near}; })
@@ -624,9 +682,9 @@ let pending=null, pickMode=false;
 function mmsg(html){ const m=$('m-msg'); m.innerHTML=html||''; m.classList.toggle('hidden',!html); }
 function setPick(on){ pickMode=on; map.classList.toggle('picking',on); }
 function closeClar(){ pending=null; setPick(false); $('clar').classList.add('hidden'); $('clar').innerHTML=''; }
-function finalize(c,loc,lat,lon,lvl,ms){
+function finalize(c,loc,lat,lon,lvl,ms,ex){
   review=review.filter(r=>r.c!==c); pts=pts.filter(p=>p.c!==c);          // a mobile station moving replaces its old pin
-  const p={c,loc,lat,lon,lvl,hand:true,t:new Date(ms).toISOString(),ms}; place(p); pts.push(p); pts.sort((a,b)=>a.ms-b.ms);
+  const p={c,loc,lat,lon,lvl,hand:true,t:new Date(ms).toISOString(),ms,route:ex&&ex.route,approx:ex&&ex.approx}; place(p); pts.push(p); pts.sort((a,b)=>a.ms-b.ms);
   saveManual();
   if(p.off){ sidebar(); mmsg('<b class="mono">'+esc(c)+'</b> is outside the Arkansas frame, so it is listed under “Outside the map frame”.'); return; }
   sidebar(); dirty=true; render(false); pulseFor([p]);
@@ -635,7 +693,7 @@ function finalize(c,loc,lat,lon,lvl,ms){
 const STORE='skywarnSpotters', KEEP_MS=24*3600*1000;
 function saveManual(){
   if(mode!=='live') return;
-  try{ localStorage.setItem(STORE,JSON.stringify(pts.filter(p=>p.hand).map(p=>({c:p.c,loc:p.loc,lat:p.lat,lon:p.lon,lvl:p.lvl,ms:p.ms})))); }catch(e){}
+  try{ localStorage.setItem(STORE,JSON.stringify(pts.filter(p=>p.hand).map(p=>({c:p.c,loc:p.loc,lat:p.lat,lon:p.lon,lvl:p.lvl,ms:p.ms,route:p.route,approx:p.approx})))); }catch(e){}
 }
 function restoreManual(){
   let list=[]; try{ list=JSON.parse(localStorage.getItem(STORE)||'[]'); }catch(e){}
@@ -648,10 +706,11 @@ function openMove(c){
   pending={c,loc:'',ms:stamp(),form:false};
   const box=$('clar'); box.classList.remove('hidden');
   box.innerHTML='<div><b>Move <span class="mono">'+esc(c)+'</span></b> (now at '+esc(cur.loc)+')</div>'+
-    '<div class="opts"><input type="text" id="mv-loc" placeholder="New location, e.g. Russellville" aria-label="New location"><button class="primary" id="mv-go">Move</button></div>'+
+    '<div class="opts"><input type="text" id="mv-loc" placeholder="'+(cur.route?'New mile marker, e.g. MM 111 (stays on '+cur.route+') — or a place':'New location, e.g. Russellville')+'" aria-label="New location"><button class="primary" id="mv-go">Move</button></div>'+
     '<div class="opts"><button id="mv-pick">Click the new spot on the map</button><button id="mv-cancel">Cancel</button></div><div id="clar-note" class="note"></div>';
-  const go=()=>{ const loc=$('mv-loc').value.trim(); if(loc.length<2){ $('clar-note').textContent='Type the new location, or click it on the map.'; return; }
-    const g=geocode(loc); if(g){ closeClar(); finalize(c,loc,g.lat,g.lon,g.lvl,stamp()); } else openClar(c,loc,stamp(),false); };
+  const go=()=>{ const loc=$('mv-loc').value.trim(); if(loc.length<1){ $('clar-note').textContent='Type the new location, or click it on the map.'; return; }
+    const hh=hwyLookup(loc,cur.route); if(hh&&hh.err){ $('clar-note').textContent=hh.err; return; }
+    const g=geocode(loc,cur.route); if(g){ closeClar(); finalize(c,g.label||loc,g.lat,g.lon,g.lvl,stamp(),g); } else openClar(c,loc,stamp(),false,cur.route); };
   $('mv-go').onclick=go; $('mv-loc').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
   $('mv-pick').onclick=()=>{ setPick(true); $('clar-note').innerHTML='<span class="pickbanner">Now click the new spot on the map. Press Esc to cancel.</span>'; };
   $('mv-cancel').onclick=()=>{ closeClar(); mmsg('Not moved.'); };
@@ -659,13 +718,13 @@ function openMove(c){
 }
 $('handlist').addEventListener('click',e=>{ const m=e.target.closest('[data-move]'), d=e.target.closest('[data-del]'); if(m) openMove(m.dataset.move); if(d) removeSpot(d.dataset.del); });
 function stamp(){ return mode==='live'?Date.now():Math.max(now,t0||0); }
-function resolveWith(r,remember){ if(!pending) return; const {c,ms}=pending; let loc=pending.loc;
+function resolveWith(r,remember){ if(!pending) return; const {c,ms}=pending; let loc=r.route?r.label:pending.loc;
   if(!loc){ const near=candidates().filter(x=>x.lvl!=='county').map(x=>({x,d:Math.hypot((x.lat-r.lat)*111,(x.lon-r.lon)*91)})).sort((a,b)=>a.d-b.d)[0]; loc=near?'Near '+near.x.label:'Chosen on map'; }
-  if(remember) saveAlias(loc,r.lat,r.lon,r.lvl);
-  const form=pending.form; closeClar(); finalize(c,loc,r.lat,r.lon,r.lvl,ms);
+  if(remember&&!r.route) saveAlias(loc,r.lat,r.lon,r.lvl);
+  const form=pending.form; closeClar(); finalize(c,loc,r.lat,r.lon,r.lvl,ms,r);
   if(form){ $('m-call').value=''; $('m-loc').value=''; } }
-function openClar(c,loc,ms,form){
-  pending={c,loc,ms,form}; const sug=suggestions(loc), cand=candidates();
+function openClar(c,loc,ms,form,ctx){
+  pending={c,loc,ms,form}; const sug=suggestions(loc,ctx), cand=candidates();
   const box=$('clar'); box.classList.remove('hidden');
   box.innerHTML='<div><b>I don\'t recognize “'+esc(loc)+'”.</b> Where should <span class="mono">'+esc(c)+'</span> go?</div>'+
     (sug.length?'<div class="opts">Did you mean: '+sug.map((x,i)=>'<button data-sug="'+i+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+
@@ -687,8 +746,10 @@ function addManual(){
   const c=$('m-call').value.trim().toUpperCase(), loc=$('m-loc').value.trim();
   if(!/^[A-Z0-9/]{3,12}$/.test(c)){ mmsg('Enter a callsign (letters and numbers, 3 to 12 characters).'); return; }
   if(loc.length<2){ mmsg('Enter where they are, for example a town or county.'); return; }
-  closeClar(); const ms=stamp(), g=geocode(loc);
-  if(g){ finalize(c,loc,g.lat,g.lon,g.lvl,ms); $('m-call').value=''; $('m-loc').value=''; $('m-call').focus(); }
+  closeClar(); const ms=stamp(), hh=hwyLookup(loc);
+  if(hh&&hh.err){ mmsg(esc(hh.err)); return; }
+  const g=geocode(loc);
+  if(g){ finalize(c,g.label||loc,g.lat,g.lon,g.lvl,ms,g); $('m-call').value=''; $('m-loc').value=''; $('m-call').focus(); }
   else { mmsg(''); openClar(c,loc,ms,true); }
 }
 $('m-add').onclick=addManual;

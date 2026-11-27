@@ -60,3 +60,13 @@ Tick **AUXCOMM-trained** to show a square badge with the number of trained peopl
 Open **Add a spotter not on Ham.Live** under the map. Enter a callsign and where the station is (a town, or "Pope County"). Recognized places are pinned at once with a dashed outline ("placed by net control"). If the place is not recognized, the map asks: pick a "Did you mean" suggestion, choose a known town or county, or click the spot on the map. Town or county choices are remembered in that browser. Adding the same callsign again moves the pin (for mobile stations). The same prompt is available from the **Place…** button on any "Needs review" entry. Spotters placed in Live mode are saved in that browser for 24 hours (a reload keeps them). A **Placed by net control** list has **Move…** (type a new place, or click the new spot on the map; map picks are labeled "Near <town>") and **Remove** for each. Placements made on a historical report are not saved.
 
 Places come from a hand-checked table (`resolve_locations.py`) plus a statewide list of ~600 Arkansas post-office towns (`data/ar_cities.json`, built by `scripts/build_gazetteer.py` from ZIP centre points, accurate to a few miles).
+
+## Highways and mile markers
+
+The **Highways** toggle draws Arkansas interstates, US routes and state routes (from the open TravelMapping/HighwayData project, `scripts/build_highways.py` -> `data/highways.json`). Interstates are always shown, US routes from ~1.5x zoom and state routes from ~2.5x, with route labels as you zoom in.
+
+Spotters can be placed by mile marker: `I-40 MM 123`, `I 40 at the 123 MM westbound`, `US 65 MM 40`, `Hwy 7 mile marker 20` (EB/WB/NB/SB optional). When moving a spotter who is on a highway, `MM 111` (or just `111`) stays on the same route. Interstate miles are tied to exit numbers (about a mile). US and state mile markers are measured along the route from its start in the data, so they are approximate and flagged as such. If a bare "Highway N" could be more than one route, the map asks which.
+
+## Position precedence
+
+For any callsign: a position set by net control (mobile or away from home) overrides the Ham.Live location, which overrides any registered address (FCC or QRZ), if such a lookup is added. A later Ham.Live check-in never replaces a hand placement.
