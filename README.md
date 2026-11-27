@@ -10,19 +10,23 @@ A map of amateur radio operators who check in to statewide Skywarn nets, with co
   - *Historical report:* replays the bundled sample net, or any Ham.Live end-of-net CSV you load from your computer (play, pause, speed, timeline). New check-ins pulse as they arrive.
   - *Live net:* accepts a Net ID or live net link and recognizes the ID, but is **not connected** to anything yet. The page exposes `addLiveCheckin({callsign, location, time})` as the single entry point a live feed will call.
 - Hover a pin for callsign, town, and time.
-- County outlines (US Census data via `us-atlas`), an optional county-names layer (off by default), and NWS CWA outlines (official NWS shapefile). Each layer has its own toggle.
+- County outlines (US Census data via `us-atlas`), a county-names layer (shown automatically from 2x zoom), and NWS CWA outlines (official NWS shapefile). Each layer has its own toggle.
 - Locations that cannot be placed with confidence are listed under "Needs review" instead of being guessed.
 
 ## What is not built yet
 
 - **Live feed.** Running-net check-ins are behind a login in Ham.Live. A proposed public, read-only endpoint is described in [docs/hamlive-checkin-feed-proposal.md](docs/hamlive-checkin-feed-proposal.md) and is awaiting review by the instance operator. The end-of-net CSV report is only available after the net closes.
 - **Net discovery.** Each Ham.Live net has a stable Net ID, and the live page is `/views/livenet/<Net ID>`. The idea is to pick or detect the current net by ID, not by its name.
-- **Geocoding.** Town coordinates in `scripts/resolve_locations.py` are approximate and entered by hand. A real build should geocode, with a manual override list.
+- **Geocoding.** Town coordinates come from a hand-checked table in `scripts/resolve_locations.py` plus a statewide list of ZIP-centre positions (accurate to a few miles). A real build should use a proper geocoder; unrecognized places go to "Needs review" or the net-control prompt.
 - **Map tiles.** The prototype draws its own outline map. A deployed site would use proper tiles.
 
 ## Privacy
 
-Pins are placed at city or county level only. The page shows callsigns, towns, and times, not names or street addresses. The raw report CSV is git-ignored because it contains names.
+**This repository is public.** Pins are placed at city or county level only. The page shows callsigns, towns, and times, not names or street addresses.
+
+Committed: code, boundary and highway data, county *totals* for licensees and AUXCOMM-trained people, and the sample net (callsigns, towns, times).
+
+Never committed (git-ignored): the Ham.Live report CSV, the FCC licensee file and the AUXCOMM roster (`*.csv`, `*.xlsx`, `*.zip`, `*.shp`). Those contain names, addresses, phone numbers and emails. The scripts that read them write only county totals.
 
 ## Rebuild
 
@@ -33,12 +37,25 @@ python scripts/build_cwa.py w_16ap26.shp   # needs: pip install pyshp shapely
 python scripts/build_page.py               # writes docs/index.html
 ```
 
+Optional data builds (inputs are not in the repo):
+
+```
+python -I scripts/licensees_by_county.py licensees.csv ar_zips.json   # data/licensees_by_county.json
+python -I scripts/auxcomm_by_county.py roster.xlsx ar_zips.json       # data/auxcomm_by_county.json
+python -I scripts/build_gazetteer.py                                  # data/ar_cities.json
+python -I scripts/export_places.py                                    # data/places.json
+python -I scripts/build_highways.py path/to/HighwayData/hwy_data/AR   # data/highways.json
+```
+
 Open `docs/index.html` in a browser.
 
 ## Data sources
 
 - County and state outlines: US Census Bureau, via the `us-atlas` npm package.
 - County Warning Areas: National Weather Service shapefile (`w_16ap26`, valid 16 April 2026), https://www.weather.gov/gis/CWABounds
+- Highways and exit numbers: TravelMapping/HighwayData (open data), https://github.com/TravelMapping/HighwayData
+- ZIP-code centre points and post-office town names: the `zipcodes` npm package (`data/ar_zip_cities.json`).
+- Licensed amateurs per county: FCC amateur licensee list (public), reduced to county totals.
 
 ## Zoom and clustering
 
