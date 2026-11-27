@@ -54,3 +54,9 @@ Tick **County shading** to colour counties by check-ins per 100 licensed hams, r
 ## AUXCOMM-trained layer
 
 Tick **AUXCOMM-trained** to show a square badge with the number of trained people in each county, and to add them to the shading options and the gap list. Counts come from `data/auxcomm_by_county.json`, made by `scripts/auxcomm_by_county.py` from the class roster (.xlsx, never committed). People are placed by home ZIP, or by the county in their organization name when no ZIP is listed; state-level groups are left unplaced.
+
+## Net control: add a spotter not on Ham.Live
+
+Open **Add a spotter not on Ham.Live** under the map. Enter a callsign and where the station is (a town, or "Pope County"). Recognized places are pinned at once with a dashed outline ("placed by net control"). If the place is not recognized, the map asks: pick a "Did you mean" suggestion, choose a known town or county, or click the spot on the map. Town or county choices are remembered in that browser. Adding the same callsign again moves the pin (for mobile stations). The same prompt is available from the **Place…** button on any "Needs review" entry. Manual entries live only in the open page: a reload clears them.
+
+Places come from a hand-checked table (`resolve_locations.py`) plus a statewide list of ~600 Arkansas post-office towns (`data/ar_cities.json`, built by `scripts/build_gazetteer.py` from ZIP centre points, accurate to a few miles).

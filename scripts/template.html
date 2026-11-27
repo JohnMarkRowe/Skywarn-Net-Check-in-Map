@@ -38,6 +38,18 @@
   .tg select{padding:2px 6px;font-size:13px}
   .auxb{fill:var(--ink);stroke:var(--card);stroke-width:1.5px;vector-effect:non-scaling-stroke;cursor:default}
   .auxn{fill:var(--card);font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+  .dot.hand{stroke-dasharray:3 2;stroke:var(--ink)}
+  #map.picking{cursor:crosshair}
+  #manual{border-top:1px solid var(--line);padding:10px 12px}
+  #manual summary{cursor:pointer;font-weight:600}
+  #manual .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  #manual input{flex:1;min-width:120px;cursor:text}
+  #manual #m-call{flex:0 0 130px;min-width:110px;text-transform:uppercase}
+  #clar{margin-top:10px;padding:10px 12px;border:1px solid var(--accent);border-radius:8px;background:var(--bg)}
+  #clar .opts{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  #clar select{max-width:100%}
+  .pickbanner{margin-top:8px;font-size:13px;color:var(--accent);font-weight:600}
+  li button.mini{padding:1px 8px;font-size:12px;margin-left:6px}
   #shadekey{display:none;align-items:center;gap:8px;font-size:12px;color:var(--mute);padding:6px 12px 0}
   #shadekey .bar{width:150px;height:10px;border-radius:5px;border:1px solid var(--line);background:linear-gradient(90deg,rgba(13,148,136,.1),rgba(13,148,136,.8))}
   .dot{fill:var(--accent);stroke:#fff;stroke-width:1.2px;cursor:pointer;opacity:.95;vector-effect:non-scaling-stroke}
@@ -148,6 +160,19 @@
       <div class="status" id="livestatus" role="status"></div>
       <div class="note">The map will add each station the moment it checks in. Hover a pin for the callsign.</div>
     </div>
+
+    <!-- Net control: spotters not on Ham.Live -->
+    <details id="manual" open>
+      <summary>Add a spotter not on Ham.Live</summary>
+      <div class="note">For a mobile or away-from-home station. Type where they are (a town, a county, or a place name) and the map will place them. If the name is not recognized, it will ask you to confirm the spot. Dashed outline on a pin = placed by net control.</div>
+      <div class="row">
+        <input type="text" id="m-call" placeholder="Callsign" aria-label="Callsign" maxlength="12" autocomplete="off">
+        <input type="text" id="m-loc" placeholder="Where are they? e.g. Mountain View, or Pope County" aria-label="Location" autocomplete="off">
+        <button class="primary" id="m-add">Add to map</button>
+      </div>
+      <div id="m-msg" class="status hidden" role="status"></div>
+      <div id="clar" class="hidden"></div>
+    </details>
   </section>
   <aside>
     <div class="card">
@@ -334,8 +359,17 @@ function clean(loc){
   s=s.replace(/\barkansas\b/g,'').replace(/[, ]+(ar|tn|tx|ga)\b\.?/g,'').replace(/[,.]/g,' ');
   return s.replace(/\s+/g,' ').trim();
 }
+const unX=x=>LON0+(x-offx)/(KX*S), unY=y=>LAT1-(y-offy)/S;
+const ALIASES=(()=>{ try{ return JSON.parse(localStorage.getItem('skywarnAliases')||'{}'); }catch(e){ return {}; } })();
+function saveAlias(loc,lat,lon,lvl){ ALIASES[clean(loc)]=[lat,lon,lvl]; try{ localStorage.setItem('skywarnAliases',JSON.stringify(ALIASES)); }catch(e){} }
+function countyCentre(n){ const c=cty[n]; return c&&c.cx!=null?{lat:unY(c.cy),lon:unX(c.cx),lvl:'county'}:null; }
 function geocode(loc){
   const key=clean(loc);
+  if(Object.prototype.hasOwnProperty.call(ALIASES,key)){ const a=ALIASES[key]; return {lat:a[0],lon:a[1],lvl:a[2]}; }
+  const cm=key.match(/^(.+?) (county|co)$/);                      // "Pope County" / "Pope Co" -> county centre
+  if(cm&&!Object.prototype.hasOwnProperty.call(PLACES.places,key)){
+    const n=Object.keys(cty).find(n=>n.toLowerCase()===cm[1]); if(n) return countyCentre(n);
+  }
   if(Object.prototype.hasOwnProperty.call(PLACES.places,key)){
     const c=PLACES.places[key];
     return {lat:c[0],lon:c[1],lvl:PLACES.countyLevel.includes(key)?'county':'city'};
@@ -356,7 +390,7 @@ function showTip(e,html){
   if(x+tip.offsetWidth>r.width-6) x=e.clientX-r.left-tip.offsetWidth-14;
   tip.style.left=x+'px'; tip.style.top=Math.max(4,y)+'px';
 }
-const pinTip=p=>'<b class="mono">'+esc(p.c)+'</b> <span>'+esc(p.loc)+' · '+fmt(p.ms)+'</span>';
+const pinTip=p=>'<b class="mono">'+esc(p.c)+'</b> <span>'+esc(p.loc)+' · '+fmt(p.ms)+(p.hand?' · placed by net control':'')+'</span>';
 function clusterTip(c){
   const names=c.members.map(m=>m.c); const shown=names.slice(0,14).map(esc).join(', ');
   return '<b>'+names.length+' stations</b><br><span class="mono">'+shown+(names.length>14?' +'+(names.length-14)+' more':'')+'</span><br><span>Click to zoom in</span>';
@@ -400,7 +434,7 @@ function drawItem(c){
   const m=c.members;
   if(m.length===1){
     const p=m[0];
-    const d=el('circle',{cx:c.x,cy:c.y,r:6/k,class:'dot'+(p.lvl==='county'?' county':''),tabindex:0,'aria-label':p.c+', '+p.loc});
+    const d=el('circle',{cx:c.x,cy:c.y,r:6/k,class:'dot'+(p.lvl==='county'?' county':'')+(p.hand?' hand':''),tabindex:0,'aria-label':p.c+', '+p.loc});
     d.addEventListener('mousemove',e=>{ if(!dragMoved) showTip(e,pinTip(p)); });
     d.addEventListener('mouseleave',()=>tip.style.display='none');
     d.addEventListener('focus',()=>{const b=d.getBoundingClientRect(); showTip({clientX:b.x+b.width,clientY:b.y},pinTip(p));});
@@ -432,7 +466,7 @@ function sidebar(){
   const offPts=pts.filter(p=>p.off);
   $('of').textContent=(mode==='live'?'live · ':'')+'of '+pts.length+' placed'+(offPts.length?' · '+offPts.length+' outside the map frame':'');
   $('offlist').innerHTML=offPts.map(p=>'<li><span class="mono">'+esc(p.c)+'</span> — '+esc(p.loc)+'</li>').join('')||'<li class="sub">None</li>';
-  $('review').innerHTML=review.map(r=>'<li><span class="mono">'+esc(r.c)+'</span> — “'+esc(r.loc)+'”</li>').join('')||'<li class="sub">None</li>';
+  $('review').innerHTML=review.map(r=>'<li><span class="mono">'+esc(r.c)+'</span> — “'+esc(r.loc)+'” <button class="mini" data-c="'+esc(r.c)+'">Place…</button></li>').join('')||'<li class="sub">None</li>';
 }
 function sidebarAux(){
   const on=$('t-aux').checked; $('auxcard').classList.toggle('hidden',!on); if(!on) return;
@@ -559,6 +593,67 @@ $('connect').onclick=()=>{
   st.innerHTML='Net ID <span class="mono">'+id+'</span> recognized. <b>Live feed not connected.</b> This prototype cannot read a running Ham.Live net yet, so no check-ins will appear. Use Historical report to replay a finished net.';
 };
 
+// ---------- Net control: add or place a spotter by hand ----------
+const lev=(a,b)=>{ const d=Array.from({length:a.length+1},(_,i)=>[i,...Array(b.length).fill(0)]); for(let j=1;j<=b.length;j++) d[0][j]=j;
+  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++) d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return d[a.length][b.length]; };
+const titleCase=t=>t.replace(/\b\w/g,c=>c.toUpperCase());
+function candidates(){
+  const out=Object.keys(PLACES.places).map(k=>({label:titleCase(k),key:k,lat:PLACES.places[k][0],lon:PLACES.places[k][1],lvl:PLACES.countyLevel.includes(k)?'county':'city'}));
+  Object.keys(cty).forEach(n=>{ const c=countyCentre(n); if(c) out.push({label:n+' County',key:n.toLowerCase()+' county',lat:c.lat,lon:c.lon,lvl:'county'}); });
+  return out.sort((a,b)=>a.label.localeCompare(b.label));
+}
+function suggestions(loc){
+  const q=clean(loc).replace(/ (county|co)$/,''); if(!q) return [];
+  return candidates().map(c=>{ const k=c.key.replace(/ county$/,''); const d=lev(q,k);
+      const near=k.includes(q)||q.includes(k)?Math.min(d,1):d; return {c,d:near}; })
+    .filter(x=>x.d<=Math.max(2,Math.floor(q.length*0.3))).sort((a,b)=>a.d-b.d).slice(0,3).map(x=>x.c);
+}
+let pending=null, pickMode=false;
+function mmsg(html){ const m=$('m-msg'); m.innerHTML=html||''; m.classList.toggle('hidden',!html); }
+function setPick(on){ pickMode=on; map.classList.toggle('picking',on); }
+function closeClar(){ pending=null; setPick(false); $('clar').classList.add('hidden'); $('clar').innerHTML=''; }
+function finalize(c,loc,lat,lon,lvl,ms){
+  review=review.filter(r=>r.c!==c); pts=pts.filter(p=>p.c!==c);          // a mobile station moving replaces its old pin
+  const p={c,loc,lat,lon,lvl,hand:true,t:new Date(ms).toISOString(),ms}; place(p); pts.push(p); pts.sort((a,b)=>a.ms-b.ms);
+  if(p.off){ sidebar(); mmsg('<b class="mono">'+esc(c)+'</b> is outside the Arkansas frame, so it is listed under “Outside the map frame”.'); return; }
+  sidebar(); dirty=true; render(false); pulseFor([p]);
+  mmsg('<b class="mono">'+esc(c)+'</b> placed at '+esc(loc)+'.');
+}
+function stamp(){ return mode==='live'?Date.now():Math.max(now,t0||0); }
+function resolveWith(r,remember){ if(!pending) return; const {c,loc,ms}=pending;
+  if(remember) saveAlias(loc,r.lat,r.lon,r.lvl);
+  const form=pending.form; closeClar(); finalize(c,loc,r.lat,r.lon,r.lvl,ms);
+  if(form){ $('m-call').value=''; $('m-loc').value=''; } }
+function openClar(c,loc,ms,form){
+  pending={c,loc,ms,form}; const sug=suggestions(loc), cand=candidates();
+  const box=$('clar'); box.classList.remove('hidden');
+  box.innerHTML='<div><b>I don\'t recognize “'+esc(loc)+'”.</b> Where should <span class="mono">'+esc(c)+'</span> go?</div>'+
+    (sug.length?'<div class="opts">Did you mean: '+sug.map((x,i)=>'<button data-sug="'+i+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+
+    '<div class="opts"><select id="clar-sel" aria-label="Nearest known place"><option value="">Pick a known town or county…</option>'+cand.map((x,i)=>'<option value="'+i+'">'+esc(x.label)+'</option>').join('')+'</select><button id="clar-use">Use this place</button></div>'+
+    '<div class="opts"><button id="clar-pick">Click the spot on the map</button><button id="clar-cancel">Cancel</button></div><div id="clar-note" class="note"></div>';
+  box.querySelectorAll('[data-sug]').forEach(b=>b.onclick=()=>resolveWith(sug[+b.dataset.sug],true));
+  $('clar-use').onclick=()=>{ const v=$('clar-sel').value; if(v==='') { $('clar-note').textContent='Choose a place from the list first.'; return; } resolveWith(cand[+v],true); };
+  $('clar-pick').onclick=()=>{ setPick(true); $('clar-note').innerHTML='<span class="pickbanner">Now click the spot on the map (zoom in first for accuracy). Press Esc to cancel.</span>'; };
+  $('clar-cancel').onclick=()=>{ closeClar(); mmsg('Not added.'); };
+  box.scrollIntoView({block:'nearest'});
+}
+map.addEventListener('click',e=>{
+  if(!pickMode||dragMoved||!pending) return;
+  const [px,py]=svgPt(e), wx=(px-tx)/k, wy=(py-ty)/k;
+  const lat=unY(wy), lon=unX(wx); resolveWith({lat,lon,lvl:'point'},false);
+});
+window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&pickMode){ setPick(false); if($('clar-note')) $('clar-note').textContent='Map click cancelled. Choose a place from the list instead.'; } });
+function addManual(){
+  const c=$('m-call').value.trim().toUpperCase(), loc=$('m-loc').value.trim();
+  if(!/^[A-Z0-9/]{3,12}$/.test(c)){ mmsg('Enter a callsign (letters and numbers, 3 to 12 characters).'); return; }
+  if(loc.length<2){ mmsg('Enter where they are, for example a town or county.'); return; }
+  closeClar(); const ms=stamp(), g=geocode(loc);
+  if(g){ finalize(c,loc,g.lat,g.lon,g.lvl,ms); $('m-call').value=''; $('m-loc').value=''; $('m-call').focus(); }
+  else { mmsg(''); openClar(c,loc,ms,true); }
+}
+$('m-add').onclick=addManual;
+['m-call','m-loc'].forEach(id=>$(id).addEventListener('keydown',e=>{ if(e.key==='Enter') addManual(); }));
+$('review').addEventListener('click',e=>{ const b=e.target.closest('button[data-c]'); if(!b) return; const r=review.find(x=>x.c===b.dataset.c); if(r) { closeClar(); openClar(r.c,r.loc,Date.parse(r.t)||stamp()); } });
 // ---------- Mode toggle ----------
 function setMode(m){
   mode=m; playing=false;

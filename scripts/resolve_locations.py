@@ -31,6 +31,9 @@ PLACES = {
  'red oak': (34.580, -93.150),  # only "Garland County" was given: county-level, approximate
 }
 COUNTY_LEVEL = {'red oak'}
+# statewide fallback (ZIP-centre average per city); the hand-checked table above always wins
+import json as _json
+PLACES = {**_json.load(open('data/ar_cities.json')), **PLACES}
 
 def clean(loc):
     s = loc.lower().strip().split(' - ')[0]
